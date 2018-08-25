@@ -3,32 +3,35 @@ package order
 import (
 	"time"
 	"gopkg.in/mgo.v2/bson"
-	"eSportsExchange/api"
-	"eSportsExchange/transaction"
+	"financialExchange/api"
+
 )
 
 type Order struct{
-	Id				bson.ObjectId				`bson:"_id"`
-	Investor 		bson.ObjectId				`bson:"investor"`
-	Symbol 			bson.ObjectId				`bson:"symbol"`
-	Action 			api.InvestorAction 			`bson:"investorAction"`
-	OrderType 		api.OrderType				`bson:"orderType"`
-	CostPerShare	api.Money					`bson:"costPerShare"`
-	CostOfShares	api.Money 					`bson:"costOfShares"`
-	SystemFee 		api.Money 					`bson:"systemFee"`
-	Created 		time.Time					`bson:"created"`
-	Updated 		time.Time 					`bson:"updated"`
-	Fulfilled		time.Time 					`bson:"fulfilled"`
-	Status 			api.OrderStatus				`bson:"orderStatus"`
-	Transactions 	[]transaction.Transaction	`bson:"transactions"`
+	Id				bson.ObjectId				`json:"id" bson:"_id"`
+	Investor 		bson.ObjectId				`json:"investor" bson:"investor"`
+	Security 		bson.ObjectId				`json:"security" bson:"security"`
+	Symbol 			string						`json:"symbol" bson:"symbol"`
+	Action 			api.InvestorAction 			`json:"investorAction" bson:"investorAction"`
+	OrderType 		api.OrderType				`json:"orderType" bson:"orderType"`
+	CostPerShare	api.Money					`json:"costPerShare" bson:"costPerShare"`
+	CostOfShares	api.Money 					`json:"costOfShares" bson:"costOfShares"`
+	SystemFee 		api.Money 					`json:"systemFee" bson:"systemFee"`
+	TotalCost 		api.Money					`json:"totalCost" bson:"totalCost"`
+	Created 		time.Time					`json:"created" bson:"created"`
+	Updated 		time.Time 					`json:"updated" bson:"updated"`
+	Fulfilled		time.Time 					`json:"fulfilled" bson:"fulfilled"`
+	Status 			api.CompletionStatus		`json:"orderStatus" bson:"orderStatus"`
+	Transactions 	[]bson.ObjectId				`json:"transactions" bson:"transactions"`
 
 	//Limit Orders Only
-	AllowTakers		bool 						`bson:"allowTakers"`
-	LimitPerShare	api.Money 					`bson:"limitPerShare"`
-
-	//todo: Look at Gdax Limit Orders to find out what TimeInForce does
+	AllowTakers		bool 						`json:"allowTakers" bson:"allowTakers"`
+	LimitPerShare	api.Money 					`json:"limitPerShare" bson:"limitPerShare"`
+	TakerFee		api.Money 					`json:"takerFee" bson:"takerFee"`
 
 	//Stop Orders Only
-	StopPrice 		api.Money 					`bson:"stopPrice"`
-	StopLimitPrice	api.Money 					`bson:"stopLimitPrice"`
+	StopPrice 		api.Money 					`json:"stopPrice" bson:"stopPrice"`
+	StopLimitPrice	api.Money 					`json:"stopLimitPrice" bson:"stopLimitPrice"`
 }
+
+

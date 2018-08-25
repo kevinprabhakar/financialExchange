@@ -6,12 +6,12 @@ type Money struct{
 	decimal.Decimal
 }
 
-type OrderStatus int
+type CompletionStatus int
 const(
-	Untouched 	OrderStatus = 0
-	InProgress	OrderStatus = 1
-	Finished  	OrderStatus = 2
-	Cancelled	OrderStatus = 3
+	Untouched 	CompletionStatus = 0
+	InProgress	CompletionStatus = 1
+	Finished  	CompletionStatus = 2
+	Cancelled	CompletionStatus = 3
 )
 
 type InvestorAction int
@@ -34,7 +34,7 @@ const(
 	STOP		OrderType = 2
 )
 
-func NewMoneyObject(amount float64) (*Money){
+func NewMoneyObject(amount float64) (Money){
 	quantity := decimal.NewFromFloat(amount)
-	return &Money{quantity}
+	return Money{quantity}
 }
