@@ -1,37 +1,37 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"encoding/json"
 	"financialExchange/util"
-	"fmt"
-	"financialExchange/customer"
+	"financialExchange/entity"
 )
 
-func SignUpCustomer(w http.ResponseWriter, r *http.Request){
+func CreateEntity(w http.ResponseWriter, r *http.Request){
 	decoder := json.NewDecoder(r.Body)
-	var params customer.CustomerSignUpParams
+	var params entity.CreateEntityParams
 	err := decoder.Decode(&params)
 
 	if err != nil{
 		http.Error(w, err.Error(), 400)
 		return
 	}
-	ServerLogger.Debug(fmt.Sprintf("Signing Up %s", params.Email))
-	err = CustomerController.SignUp(params)
+	ServerLogger.Debug(fmt.Sprintf("Creating Entity %s", params.Name))
+	err = EntityController.CreateEntity(params)
 
 	if err != nil{
 		http.Error(w, err.Error(), 500)
-		ServerLogger.ErrorMsg(fmt.Sprintf("Error while signing up %s: %s", params.Email, err.Error()))
+		ServerLogger.ErrorMsg(fmt.Sprintf("Error while creating Entity %s: %s", params.Name, err.Error()))
 		return
 	}
 
 	fmt.Fprint(w, util.GetNoDataSuccessResponse())
 }
 
-func SignInCustomer(w http.ResponseWriter, r *http.Request){
+func SignInEntity(w http.ResponseWriter, r *http.Request){
 	decoder := json.NewDecoder(r.Body)
-	var params customer.CustomerSignInParams
+	var params entity.SignInEntityParams
 	err := decoder.Decode(&params)
 
 	if err != nil{
@@ -41,7 +41,7 @@ func SignInCustomer(w http.ResponseWriter, r *http.Request){
 
 	ServerLogger.Debug(fmt.Sprintf("Signing In %s", params.Email))
 
-	accessToken, err := CustomerController.SignIn(params)
+	accessToken, err := EntityController.SignIn(params)
 
 	if err != nil{
 		http.Error(w, err.Error(), 401)

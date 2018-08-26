@@ -15,10 +15,10 @@ type EntityController struct{
 	Logger 		util.Logger
 }
 
-func NewEntityController (session *mgo.Session, logger util.Logger)(*EntityController){
+func NewEntityController (session *mgo.Session, logger *util.Logger)(*EntityController){
 	return &EntityController{
 		Session: session,
-		Logger: logger,
+		Logger: *logger,
 	}
 }
 
@@ -104,3 +104,36 @@ func(self *EntityController) CreateEntity(params CreateEntityParams)(error){
 	return nil
 }
 
+func (self *EntityController) SignIn(SignInParams SignInEntityParams)(string, error){
+	if (!util.IsValidEmail(SignInParams.Email)){
+		return "", errors.New("MissingEmailField")
+	}
+	if(len(SignInParams.Password) == 0){
+		return "", errors.New("MissingPasswordField")
+	}
+
+	var verifyUser Entity
+
+	userCollection := mongo.GetEntityCollection(mongo.GetDataBase(self.Session))
+
+	//Find if user is registered in database
+	findErr := userCollection.Find(bson.M{"email" : SignInParams.Email}).One(&verifyUser)
+
+	if (findErr != nil){
+		return "", errors.New("NonexistentEntity")
+	}
+
+	//Check if password provided matches hash on file
+	passwordMatch := util.CheckPasswordHash(SignInParams.Password, verifyUser.PassHash)
+	if (!passwordMatch){
+		return "", errors.New("InvalidPassword")
+	}
+
+	//Return access token for usage
+	accessToken, err := util.GetAccessToken(verifyUser.Id.Hex())
+	if err != nil{
+		return "", err
+	}
+
+	return accessToken, nil
+}

@@ -40,7 +40,7 @@ func GetCustomerCollection(db *mgo.Database) *mgo.Collection {
 }
 
 func GetPortfolioCollection(db *mgo.Database) *mgo.Collection {
-	return db.C("portfolio")
+	return db.C("Portfolio")
 }
 
 func GetEntityCollection(db *mgo.Database) *mgo.Collection {

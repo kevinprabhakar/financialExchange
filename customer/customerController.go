@@ -113,7 +113,7 @@ func (self *CustomerController)SignIn(SignInParams CustomerSignInParams)(string,
 	}
 
 	//Return access token for usage
-	accessToken, err := GetAccessToken(verifyUser.Id.Hex())
+	accessToken, err := util.GetAccessToken(verifyUser.Id.Hex())
 	if err != nil{
 		return "", err
 	}
@@ -122,7 +122,7 @@ func (self *CustomerController)SignIn(SignInParams CustomerSignInParams)(string,
 }
 
 func (self *CustomerController)GetCurrUser(accessToken string)(*Customer, error){
-	uid, err := VerifyAccessToken(accessToken)
+	uid, err := util.VerifyAccessToken(accessToken)
 
 	if (err != nil){
 		return nil, err

@@ -13,6 +13,10 @@ func main(){
 	r := mux.NewRouter()
 
 	r.HandleFunc("/", handlers.HomeHealthCheck).Methods("GET", "POST")
+
+	r.HandleFunc("/api/entity", handlers.CreateEntity).Methods("POST")
+	r.HandleFunc("/api/entity/login", handlers.SignInEntity).Methods("POST")
+
 	r.HandleFunc("/api/customer", handlers.SignUpCustomer).Methods("POST")
 	r.HandleFunc("/api/customer/login", handlers.SignInCustomer).Methods("POST")
 

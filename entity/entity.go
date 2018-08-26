@@ -23,3 +23,8 @@ type CreateEntityParams struct{
 	PasswordVerify  string				`json:"passwordVerify"`
 	Symbol 			string 				`json:"symbol"`
 }
+
+type SignInEntityParams struct{
+	Email 			string 				`json:"email"`
+	Password 		string 				`json:"password"`
+}
