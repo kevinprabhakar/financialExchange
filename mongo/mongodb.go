@@ -3,6 +3,7 @@ package mongo
 import (
 	"gopkg.in/mgo.v2"
 	"os"
+	"fmt"
 )
 
 const DBname = "financialExchange"
@@ -50,14 +51,14 @@ func GetSecurityCollection(db *mgo.Database) *mgo.Collection {
 	return db.C("Security")
 }
 
-func GetOrderBook(db *mgo.Database) *mgo.Collection{
-	return db.C("OrderBook")
+func GetOrderBookForSecurity(db *mgo.Database, symbol string) *mgo.Collection{
+	return db.C(fmt.Sprintf("%s-orders",symbol))
 }
 
-func GetTransactions(db *mgo.Database) *mgo.Collection{
-	return db.C("Transaction")
+func GetTransactionsForSecurity(db *mgo.Database, symbol string) *mgo.Collection{
+	return db.C(fmt.Sprintf("%s-transactions",symbol))
 }
 
 func GetPriceBookForSecurity(db *mgo.Database, symbol string) *mgo.Collection{
-	return db.C(symbol)
+	return db.C(fmt.Sprintf("%s-prices"))
 }

@@ -87,6 +87,7 @@ func(self *EntityController) CreateEntity(params CreateEntityParams)(error){
 		Entity: entityId,
 		Symbol: params.Symbol,
 	}
+
 	insertErr = securityCollection.Insert(newSecurity)
 	if insertErr != nil {
 		return err
@@ -97,7 +98,7 @@ func(self *EntityController) CreateEntity(params CreateEntityParams)(error){
 	mongo creates collections upon data insertion, so should I:
 		- create it when creating the entity
 		- create when first trade is made
-	--going with second one for now
+	--going with second one for now--
 	***/
 
 	return nil
