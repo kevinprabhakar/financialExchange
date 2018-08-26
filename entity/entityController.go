@@ -28,6 +28,10 @@ func(self *EntityController) CreateEntity(params CreateEntityParams)(error){
 		return errors.New("InvalidEmailAddress")
 	}
 
+	if len(params.Symbol) < 1 || len(params.Symbol) > 4{
+		return errors.New("InvalidSymbolLength")
+	}
+
 	if(len(params.Password) < 6){
 		return errors.New("PasswordTooShort")
 	}
@@ -79,18 +83,22 @@ func(self *EntityController) CreateEntity(params CreateEntityParams)(error){
 		return err
 	}
 
-	//Create security and insert to database
-	securityCollection := mongo.GetSecurityCollection(mongo.GetDataBase(self.Session))
+	if params.CreateSecurity{
+		go func() {
+			//Create security and insert to database
+			securityCollection := mongo.GetSecurityCollection(mongo.GetDataBase(self.Session))
 
-	newSecurity := security.Security{
-		Id: securityId,
-		Entity: entityId,
-		Symbol: params.Symbol,
-	}
+			newSecurity := security.Security{
+				Id: securityId,
+				Entity: entityId,
+				Symbol: params.Symbol,
+			}
 
-	insertErr = securityCollection.Insert(newSecurity)
-	if insertErr != nil {
-		return err
+			insertErr = securityCollection.Insert(newSecurity)
+			if insertErr != nil {
+				return err
+			}
+		}()
 	}
 
 	/***

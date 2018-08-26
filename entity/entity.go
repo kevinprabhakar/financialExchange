@@ -21,6 +21,7 @@ type CreateEntityParams struct{
 	Email 			string 				`json:"email"`
 	Password 		string 				`json:"password"`
 	PasswordVerify  string				`json:"passwordVerify"`
+	CreateSecurity 	bool 				`json:"createSecurity"`
 	Symbol 			string 				`json:"symbol"`
 }
 
