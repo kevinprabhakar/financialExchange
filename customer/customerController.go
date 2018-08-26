@@ -41,7 +41,7 @@ func (self *CustomerController)SignUp(SignUpParams CustomerSignUpParams)(error){
 	err := customerCollection.Find(bson.M{ "email": SignUpParams.Email}).One(&findUser)
 
 	if (err != mgo.ErrNotFound){
-		return err
+		return errors.New("CustomerExists")
 	}
 
 	passHash, err := util.HashPassword(SignUpParams.Password)
