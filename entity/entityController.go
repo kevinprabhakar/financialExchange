@@ -27,7 +27,7 @@ func(self *EntityController) CreateEntity(params CreateEntityParams)(error){
 	if (!util.IsValidEmail(params.Email)){
 		return errors.New("InvalidEmailAddress")
 	}
-
+	time.Now().Unix()
 	if len(params.Symbol) < 1 || len(params.Symbol) > 4{
 		return errors.New("InvalidSymbolLength")
 	}
