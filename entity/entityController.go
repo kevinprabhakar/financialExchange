@@ -1,33 +1,33 @@
 package entity
 
 import (
-	"gopkg.in/mgo.v2"
 	"financialExchange/util"
-	"errors"
-	"financialExchange/mongo"
-	"gopkg.in/mgo.v2/bson"
+	"financialExchange/sql"
+	"financialExchange/model"
 	"time"
-	"financialExchange/security"
+
+	"errors"
+	gosql "database/sql"
+
 )
 
 type EntityController struct{
-	Session		*mgo.Session
-	Logger 		util.Logger
+	Database		*sql.MySqlDB
+	Logger 			*util.Logger
 }
 
-func NewEntityController (session *mgo.Session, logger *util.Logger)(*EntityController){
+func NewEntityController (database *sql.MySqlDB, logger *util.Logger)(*EntityController){
 	return &EntityController{
-		Session: session,
-		Logger: *logger,
+		Database: database,
+		Logger: logger,
 	}
 }
 
-func(self *EntityController) CreateEntity(params CreateEntityParams)(error){
+func(self *EntityController) CreateEntity(params model.CreateEntityParams)(error){
 	//Field Validation
 	if (!util.IsValidEmail(params.Email)){
 		return errors.New("InvalidEmailAddress")
 	}
-	time.Now().Unix()
 	if len(params.Symbol) < 1 || len(params.Symbol) > 4{
 		return errors.New("InvalidSymbolLength")
 	}
@@ -41,20 +41,21 @@ func(self *EntityController) CreateEntity(params CreateEntityParams)(error){
 	}
 
 	//Verify Entity has not signed up with this email before
-	entityCollection := mongo.GetEntityCollection(mongo.GetDataBase(self.Session))
-
-	var findEntity Entity
-
-	err := entityCollection.Find(bson.M{ "email": params.Email}).One(&findEntity)
-
-	if (err != mgo.ErrNotFound){
-		return errors.New("EntityExists")
+	_, err := self.Database.CheckIfEntityInTable(params.Email)
+	if err != nil {
+		if err == gosql.ErrNoRows{
+		} else{
+			return errors.New("EntityExists")
+		}
 	}
-	//Verify symbol has not been used before
-	err = entityCollection.Find(bson.M{"symbol" : params.Symbol}).One(&findEntity)
 
-	if (err != mgo.ErrNotFound){
-		return errors.New("SymbolExists")
+	//Verify symbol has not been used before
+	_, err = self.Database.CheckIfSecurityInTable(params.Symbol)
+	if err != nil {
+		if err == gosql.ErrNoRows{
+		} else{
+			return errors.New("SecurityNameExists")
+		}
 	}
 
 	//Hash Password
@@ -63,56 +64,47 @@ func(self *EntityController) CreateEntity(params CreateEntityParams)(error){
 		return err
 	}
 
-	entityId := bson.NewObjectId()
-	securityId := bson.NewObjectId()
+	creationTime := time.Now().Unix()
 
 	//Create entity and insert to database
-	newEntity := Entity{
-		Id: entityId,
+	newEntity := model.Entity{
 		Name: params.Name,
 		Email: params.Email,
 		PassHash: passHash,
-		Security: securityId,
-		Created: time.Now(),
-		Deleted: time.Unix(0,0),
+		Security: -1,
+		Created: creationTime,
+		Deleted: creationTime,
 	}
 
-	insertErr := entityCollection.Insert(newEntity)
+	entityId, insertErr := self.Database.InsertEntityIntoTable(newEntity)
 
 	if insertErr != nil{
 		return err
 	}
 
 	if params.CreateSecurity{
-		go func() {
-			//Create security and insert to database
-			securityCollection := mongo.GetSecurityCollection(mongo.GetDataBase(self.Session))
+		//Create security and insert to database
+		newSecurity := model.Security{
+			Entity: entityId,
+			Symbol: params.Symbol,
+		}
 
-			newSecurity := security.Security{
-				Id: securityId,
-				Entity: entityId,
-				Symbol: params.Symbol,
-			}
+		securityId, insertErr := self.Database.InsertSecurityIntoTable(newSecurity)
 
-			insertErr = securityCollection.Insert(newSecurity)
-			if insertErr != nil {
-				return err
-			}
-		}()
+		if insertErr != nil {
+			return err
+		}
+
+		err := self.Database.UpdateEntityWithSecurityID(entityId, securityId)
+		if err != nil{
+			return err
+		}
 	}
-
-	/***
-	todo: find out how (and where) to create the pricebook
-	mongo creates collections upon data insertion, so should I:
-		- create it when creating the entity
-		- create when first trade is made
-	--going with second one for now--
-	***/
 
 	return nil
 }
 
-func (self *EntityController) SignIn(SignInParams SignInEntityParams)(string, error){
+func (self *EntityController) SignIn(SignInParams model.SignInEntityParams)(string, error){
 	if (!util.IsValidEmail(SignInParams.Email)){
 		return "", errors.New("MissingEmailField")
 	}
@@ -120,25 +112,20 @@ func (self *EntityController) SignIn(SignInParams SignInEntityParams)(string, er
 		return "", errors.New("MissingPasswordField")
 	}
 
-	var verifyUser Entity
-
-	userCollection := mongo.GetEntityCollection(mongo.GetDataBase(self.Session))
-
-	//Find if user is registered in database
-	findErr := userCollection.Find(bson.M{"email" : SignInParams.Email}).One(&verifyUser)
+	findEntity, findErr := self.Database.GetEntityByEmail(SignInParams.Email)
 
 	if (findErr != nil){
 		return "", errors.New("NonexistentEntity")
 	}
 
 	//Check if password provided matches hash on file
-	passwordMatch := util.CheckPasswordHash(SignInParams.Password, verifyUser.PassHash)
+	passwordMatch := util.CheckPasswordHash(SignInParams.Password, findEntity.PassHash)
 	if (!passwordMatch){
 		return "", errors.New("InvalidPassword")
 	}
 
 	//Return access token for usage
-	accessToken, err := util.GetAccessToken(verifyUser.Id.Hex())
+	accessToken, err := util.GetAccessToken(findEntity.Email)
 	if err != nil{
 		return "", err
 	}

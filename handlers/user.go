@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"financialExchange/util"
 	"fmt"
-	"financialExchange/customer"
+	"financialExchange/model"
 )
 
 func SignUpCustomer(w http.ResponseWriter, r *http.Request){
 	decoder := json.NewDecoder(r.Body)
-	var params customer.CustomerSignUpParams
+	var params model.CustomerSignUpParams
 	err := decoder.Decode(&params)
 
 	if err != nil{
@@ -31,7 +31,7 @@ func SignUpCustomer(w http.ResponseWriter, r *http.Request){
 
 func SignInCustomer(w http.ResponseWriter, r *http.Request){
 	decoder := json.NewDecoder(r.Body)
-	var params customer.CustomerSignInParams
+	var params model.CustomerSignInParams
 	err := decoder.Decode(&params)
 
 	if err != nil{

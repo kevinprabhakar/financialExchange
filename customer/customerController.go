@@ -1,26 +1,24 @@
 package customer
 
 import (
-	"gopkg.in/mgo.v2/bson"
-	"gopkg.in/mgo.v2"
 	"errors"
 	"financialExchange/util"
-	"financialExchange/mongo"
 	"golang.org/x/net/html"
-	"financialExchange/portfolio"
-	"financialExchange/api"
+	"financialExchange/model"
+	"financialExchange/sql"
+	gosql "database/sql"
 )
 
 type CustomerController struct {
-	Session 		*mgo.Session
 	Logger 			*util.Logger
+	Database 		*sql.MySqlDB
 }
 
-func NewCustomerController(session *mgo.Session, logger *util.Logger)(*CustomerController) {
-	return &CustomerController{session, logger}
+func NewCustomerController(logger *util.Logger, db *sql.MySqlDB)(*CustomerController) {
+	return &CustomerController{logger, db}
 }
 
-func (self *CustomerController)SignUp(SignUpParams CustomerSignUpParams)(error){
+func (self *CustomerController)SignUp(SignUpParams model.CustomerSignUpParams)(error){
 	if (!util.IsValidEmail(SignUpParams.Email)){
 		return errors.New("InvalidEmailAddress")
 	}
@@ -33,15 +31,13 @@ func (self *CustomerController)SignUp(SignUpParams CustomerSignUpParams)(error){
 		return errors.New("PasswordsDontMatch")
 	}
 
-	customerCollection := mongo.GetCustomerCollection(mongo.GetDataBase(self.Session))
+	_, doesCustomerExist := self.Database.CheckIfCustomerInTable(SignUpParams.Email)
 
-	var findUser Customer
-
-	//Verify user has not signed up with this email before
-	err := customerCollection.Find(bson.M{ "email": SignUpParams.Email}).One(&findUser)
-
-	if (err != mgo.ErrNotFound){
-		return errors.New("CustomerExists")
+	if doesCustomerExist != nil {
+		if doesCustomerExist == gosql.ErrNoRows{
+		} else{
+			return doesCustomerExist
+		}
 	}
 
 	passHash, err := util.HashPassword(SignUpParams.Password)
@@ -49,45 +45,50 @@ func (self *CustomerController)SignUp(SignUpParams CustomerSignUpParams)(error){
 		return err
 	}
 	//First insert user
-	newUser := Customer{
-		Id			: bson.NewObjectId(),
+	newUser := model.Customer{
 		FirstName	: SignUpParams.FirstName,
 		LastName 	: SignUpParams.LastName,
 		PassHash	: passHash,
 		Email 		: html.EscapeString(SignUpParams.Email),
-		Portfolio 	: bson.NewObjectId(),
+		Portfolio	: 0,
 	}
 
-	insertErr := customerCollection.Insert(newUser)
+	userId, insertErr := self.Database.InsertCustomerIntoTable(newUser)
 
 	if (insertErr != nil){
 		return insertErr
 	}
 
 	//Next insert new user portfolio
-	newUserPortfolio := portfolio.Portfolio{
-		Id: newUser.Portfolio,
-		User: newUser.Id,
-		Value: api.NewMoneyObject(0.0),
-		StockValue: api.NewMoneyObject(0.0),
-		CashValue: api.NewMoneyObject(0.0),
-		WithdrawableFunds: api.NewMoneyObject(0.0),
-		OwnedShares: make(map[bson.ObjectId]int, 0),
-		Orders: []bson.ObjectId{},
-		Transactions: []bson.ObjectId{},
+	//To start out with, each user will get $100.00 (Set at value and Cash Value)
+	//This is solely for testing purposes
+	//In the future, stripe integration will let us draw money from credit cards
+	newUserPortfolio := model.Portfolio{
+		Customer: userId,
+		//Value = (Stock + Cash + Withdrawables)
+		Value: model.NewMoneyObject(100.0),
+		StockValue: model.NewMoneyObject(0.0),
+		CashValue: model.NewMoneyObject(100.0),
+		WithdrawableFunds: model.NewMoneyObject(0.0),
 	}
 
-	portfolioCollection := mongo.GetPortfolioCollection(mongo.GetDataBase(self.Session))
+	portfolioId, err := self.Database.InsertPortfolioToTable(newUserPortfolio)
 
-	insertErr = portfolioCollection.Insert(newUserPortfolio)
-	if (insertErr != nil){
-		return insertErr
+	if err != nil{
+		return err
+	}
+
+	//Now update user to link it to the just created Portfolio
+	updateErr := self.Database.AttachPortfolioToCustomer(userId, portfolioId)
+
+	if updateErr != nil{
+		return err
 	}
 
 	return nil
 }
 
-func (self *CustomerController)SignIn(SignInParams CustomerSignInParams)(string, error){
+func (self *CustomerController)SignIn(SignInParams model.CustomerSignInParams)(string, error){
 	if (!util.IsValidEmail(SignInParams.Email)){
 		return "", errors.New("MissingEmailField")
 	}
@@ -95,25 +96,26 @@ func (self *CustomerController)SignIn(SignInParams CustomerSignInParams)(string,
 		return "", errors.New("MissingPasswordField")
 	}
 
-	var verifyUser Customer
-
-	userCollection := mongo.GetCustomerCollection(mongo.GetDataBase(self.Session))
+	userEmail, err := self.Database.CheckIfCustomerInTable(SignInParams.Email)
 
 	//Find if user is registered in database
-	findErr := userCollection.Find(bson.M{"email" : SignInParams.Email}).One(&verifyUser)
-
-	if (findErr != nil){
+	if (err != nil){
 		return "", errors.New("NonexistentUser")
 	}
 
+	userObj, err := self.Database.GetCustomerByEmail(userEmail)
+	if err != nil{
+		return "", err
+	}
+
 	//Check if password provided matches hash on file
-	passwordMatch := util.CheckPasswordHash(SignInParams.Password, verifyUser.PassHash)
+	passwordMatch := util.CheckPasswordHash(SignInParams.Password, userObj.PassHash)
 	if (!passwordMatch){
 		return "", errors.New("InvalidPassword")
 	}
 
 	//Return access token for usage
-	accessToken, err := util.GetAccessToken(verifyUser.Id.Hex())
+	accessToken, err := util.GetAccessToken(userObj.Email)
 	if err != nil{
 		return "", err
 	}
@@ -121,27 +123,19 @@ func (self *CustomerController)SignIn(SignInParams CustomerSignInParams)(string,
 	return accessToken, nil
 }
 
-func (self *CustomerController)GetCurrUser(accessToken string)(*Customer, error){
+func (self *CustomerController)GetCurrUser(accessToken string)(*model.Customer, error){
 	uid, err := util.VerifyAccessToken(accessToken)
 
 	if (err != nil){
 		return nil, err
 	}
-	if (!bson.IsObjectIdHex(uid)){
-		return nil, errors.New("InvalidBSONId")
-	}
-
-	userCollection := mongo.GetCustomerCollection(mongo.GetDataBase(self.Session))
-
-	var returnUser Customer
-
-	findErr := userCollection.Find(bson.M{ "_id" : bson.ObjectIdHex(uid)}).One(&returnUser)
+	userObj, findErr := self.Database.GetCustomerByEmail(uid)
 
 	if (findErr != nil){
 		return nil, findErr
 	}
 
-	return &returnUser, nil
+	return userObj, nil
 }
 
 //func (self *CustomerController)GetUsers(params string)(*[]Customer, error){

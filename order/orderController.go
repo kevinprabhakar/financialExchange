@@ -1,35 +1,29 @@
 package order
 
 import (
-	"gopkg.in/mgo.v2"
-	"onePercent/util"
+	"financialExchange/util"
+	"financialExchange/model"
+	"financialExchange/sql"
 	"errors"
-	"gopkg.in/mgo.v2/bson"
-	"financialExchange/mongo"
-	"financialExchange/customer"
-	"financialExchange/entity"
-	"financialExchange/api"
-	"financialExchange/portfolio"
-	"math"
-	"financialExchange/security"
+	gosql "database/sql"
 	"time"
 )
 
 type OrderController struct {
-	Session        *mgo.Session
-	Logger         util.Logger
-	OrdersOutgoing chan OrderTransactionPackage
+	Database        *sql.MySqlDB
+	Logger         *util.Logger
+	OrdersOutgoing chan model.OrderTransactionPackage
 }
 
-func NewOrderController (session *mgo.Session, logger util.Logger, ordersOutgoing chan OrderTransactionPackage)(*OrderController){
+func NewOrderController (database *sql.MySqlDB, logger *util.Logger, ordersOutgoing chan model.OrderTransactionPackage)(*OrderController){
 	return &OrderController{
-		Session: session,
+		Database: database,
 		Logger: logger,
 		OrdersOutgoing: ordersOutgoing,
 	}
 }
 
-func (self *OrderController) CreateOrder(params OrderCreateParams)(error){
+func (self *OrderController) CreateOrder(params model.OrderCreateParams)(error){
 	//Validate order fields
 	validErr := self.ValidateOrderFields(params)
 
@@ -37,15 +31,46 @@ func (self *OrderController) CreateOrder(params OrderCreateParams)(error){
 		return validErr
 	}
 
+	//Get security by symbol
+	securityId, err := self.Database.CheckIfSecurityInTable(params.Symbol)
+	if err != nil{
+		return errors.New("Invalid Symbol")
+	}
+
+
+	orderToInsert := model.Order{
+		Investor: params.UserID,
+		InvestorAction: model.InvestorAction(params.InvestorAction),
+		InvestorType: model.InvestorType(params.InvestorType),
+		OrderType: model.OrderType(params.OrderType),
+		Security: securityId,
+		Symbol: params.Symbol,
+		NumShares: params.NumShares,
+		CostPerShare: model.NewMoneyObject(params.CostPerShare),
+		CostOfShares: model.NewMoneyObject(float64(params.NumShares) * params.CostPerShare),
+		//No system fee... FOR NOW
+		SystemFee: model.NewMoneyObject(0.0),
+		//Total Cost = (Cost of Shares * Cost Per Share) + 0.0
+		TotalCost: model.NewMoneyObject((float64(params.NumShares) * params.CostPerShare)+0.0),
+		Created: time.Now().Unix(),
+		Updated: time.Now().Unix(),
+		Fulfilled: time.Now().Unix(),
+		Status: model.Untouched,
+		AllowTakers: params.AllowTakers,
+		LimitPerShare: model.NewMoneyObject(params.LimitPerShare),
+		TakerFee: model.NewMoneyObject(0.0),
+		StopPrice: model.NewMoneyObject(0.0),
+	}
+
 	//Insert order into database
-	newOrder, insertErr := self.InsertOrderToDatabase(params)
+	_, insertErr := self.Database.InsertOrderIntoTable(orderToInsert)
 
 	if insertErr != nil{
 		return insertErr
 	}
 
 	//Get matching orders
-	matchingOrders, matchingErr := self.GetMatchingOrders(newOrder, newOrder.Symbol)
+	matchingOrders, matchingErr := self.GetMatchingOrders(orderToInsert)
 
 	if matchingErr != nil{
 		return matchingErr
@@ -56,63 +81,108 @@ func (self *OrderController) CreateOrder(params OrderCreateParams)(error){
 		return nil
 	}else{
 		//Filter orders in the array
-		orderToShareMap, filterError := self.FilterMatchingOrders(newOrder, matchingOrders)
+		orderToShareMap, filterError := self.FilterMatchingOrders(orderToInsert, matchingOrders)
 
 		if filterError != nil{
 			return filterError
 		}
 
 		//Create order transaction set
-		orderTransactionSet := OrderTransactionPackage{
-			MainOrder: newOrder.Id,
+		orderTransactionSet := model.OrderTransactionPackage{
+			MainOrder: orderToInsert.ID,
 			MatchingOrders: orderToShareMap,
 		}
 
 		//Send order transaction package to concurrent transaction controller
 		self.OrdersOutgoing <- orderTransactionSet
-
-		return
 	}
 
 
 	return nil
 }
 
-func (self *OrderController)GetMatchingOrders(order Order, symbol string)([]Order, error){
-	orderCollection := mongo.GetOrderBookForSecurity(mongo.GetDataBase(self.Session), symbol)
 
-	matchingOrders := make([]Order, 0)
+func (self *OrderController)GetMatchingOrders(order model.Order)([]model.Order, error){
+	matchingOrders := make([]model.Order,0)
 
+	sqlStatement := `SELECT * FROM orders WHERE symbol = ? AND investorAction = ? AND numShares >= ? AND status = ? OR status = ? ORDER BY created`
 
-	//Only considering buy/sell signals..for now
-	query := bson.M{
-		"investorAction" : int(math.Abs(order.Action-1)),
-		"numShares" : bson.M{
-			"$gte" : order.NumShares,
-		},
-		"orderStatus" : bson.M{
-			"$in" : []int{api.Untouched, api.InProgress},
-		},
-	}
-
-	err := orderCollection.Find(query).Sort("-created").All(&matchingOrders)
+	rows, err := self.Database.Query(sqlStatement, order.Symbol, util.IntAbsVal(int(order.InvestorAction)-1), order.NumShares, model.InProgress, model.Untouched)
 
 	if err != nil{
-		return []Order{}, err
+		return matchingOrders, err
+	}
+
+	defer rows.Close()
+
+	for rows.Next(){
+		var (
+			Id				gosql.NullInt64
+			Investor 		gosql.NullInt64
+			Security 		gosql.NullInt64
+			Symbol 			gosql.NullString
+			InvestorAction	gosql.NullInt64
+			InvestorType	gosql.NullInt64
+			OrderType		gosql.NullInt64
+			NumShares 		gosql.NullInt64
+			CostPerShare	gosql.NullFloat64
+			CostOfShares	gosql.NullFloat64
+			SystemFee 		gosql.NullFloat64
+			TotalCost 		gosql.NullFloat64
+			Created 		gosql.NullInt64
+			Updated 		gosql.NullInt64
+			Fulfilled 		gosql.NullInt64
+			Status 			gosql.NullInt64
+			AllowTakers 	gosql.NullBool
+			LimitPerShare 	gosql.NullFloat64
+			TakerFee		gosql.NullFloat64
+			StopPrice		gosql.NullFloat64
+		)
+
+		err := rows.Scan(&Id , &Investor , &Security , &Symbol , &InvestorAction , &InvestorType , &OrderType , &NumShares ,
+			&CostPerShare , &CostOfShares , &SystemFee , &TotalCost , &Created , &Updated , &Fulfilled , &Status ,
+			&AllowTakers , &LimitPerShare , &TakerFee, &StopPrice)
+
+		if err != nil{
+			return []model.Order{}, err
+		}
+
+		matchOrder := model.Order{
+			Investor: Investor.Int64,
+			Security: Security.Int64,
+			Symbol: Symbol.String,
+			InvestorAction: model.InvestorAction(InvestorAction.Int64),
+			InvestorType: model.InvestorType(InvestorType.Int64),
+			OrderType: model.OrderType(OrderType.Int64),
+			NumShares: int(NumShares.Int64),
+			CostPerShare: model.NewMoneyObject(CostPerShare.Float64),
+			CostOfShares: model.NewMoneyObject(CostOfShares.Float64),
+			SystemFee: model.NewMoneyObject(SystemFee.Float64),
+			TotalCost: model.NewMoneyObject(TotalCost.Float64),
+			Created: Created.Int64,
+			Updated: Updated.Int64,
+			Fulfilled: Fulfilled.Int64,
+			Status: model.CompletionStatus(Status.Int64),
+			AllowTakers: AllowTakers.Bool,
+			LimitPerShare: model.NewMoneyObject(LimitPerShare.Float64),
+			TakerFee: model.NewMoneyObject(LimitPerShare.Float64),
+			StopPrice: model.NewMoneyObject(StopPrice.Float64),
+		}
+
+		matchingOrders = append(matchingOrders, matchOrder)
 	}
 
 	return matchingOrders, nil
 
 }
 
-func (self *OrderController) FilterMatchingOrders(currOrder Order, matchingOrders []Order)(map[bson.ObjectId]int, error){
+func (self *OrderController) FilterMatchingOrders(currOrder model.Order, matchingOrders []model.Order)(map[int64]int, error){
 	//All orders sorted by timestamp in FIFO style
-	orderToShareMap := make(map[bson.ObjectId]int, 0)
+	orderToShareMap := make(map[int64]int, 0)
 
 	numShares := currOrder.NumShares
 
 	workingNumShares := 0
-
 
 	for _, order := range(matchingOrders){
 		//If we haven't exceeded total amount of allotted shares
@@ -123,13 +193,13 @@ func (self *OrderController) FilterMatchingOrders(currOrder Order, matchingOrder
 			//If the current order examined has more shares than we need allocated
 			if order.NumShares > sharesRemaining{
 				//Assign those shares and exit
-				orderToShareMap[order.Id] = sharesRemaining
+				orderToShareMap[order.ID] = sharesRemaining
 				workingNumShares = numShares
 				break
 			//If current order examined has less shares than we need allocated
 			}else{
 				//Grab all the shares from this order
-				orderToShareMap[order.Id] = order.NumShares
+				orderToShareMap[order.ID] = order.NumShares
 				//Increment workingNumShares
 				workingNumShares += order.NumShares
 				//Examine next order in next iteration of loop
@@ -138,7 +208,7 @@ func (self *OrderController) FilterMatchingOrders(currOrder Order, matchingOrder
 	}
 
 	if workingNumShares == 0{
-		return map[bson.ObjectId]int{}, errors.New("NoMatchingOrder")
+		return map[int64]int{}, errors.New("NoMatchingOrder")
 	}
 
 	if numShares != workingNumShares{
@@ -148,7 +218,7 @@ func (self *OrderController) FilterMatchingOrders(currOrder Order, matchingOrder
 	return orderToShareMap, nil
 }
 
-func (self *OrderController) ValidateOrderFields(params OrderCreateParams) (error){
+func (self *OrderController) ValidateOrderFields(params model.OrderCreateParams) (error){
 	//Field Validation
 	if params.OrderType < 0 || params.InvestorType > 2{
 		return errors.New("InvalidOrderType")
@@ -160,102 +230,116 @@ func (self *OrderController) ValidateOrderFields(params OrderCreateParams) (erro
 		return errors.New("InvalidInvestorAction")
 	}
 
-	//Verify User has signed up with this email before
-	userCollection := mongo.GetCustomerCollection(mongo.GetDataBase(self.Session))
-	portfolioCollection := mongo.GetPortfolioCollection(mongo.GetDataBase(self.Session))
-
-	var findUser customer.Customer
-	var userPortfolio portfolio.Portfolio
-
-	err := userCollection.Find(bson.M{ "_id": bson.ObjectIdHex(params.UserID)}).One(&findUser)
-
-	if (err == mgo.ErrNotFound){
-		return errors.New("NonexistentUser")
-	}
-	if err != nil{
-		return err
-	}
-	//Grab user portfolio
-	err = portfolioCollection.Find(bson.M{"user":findUser.Id}).One(&userPortfolio)
-
-	if (err == mgo.ErrNotFound){
-		return errors.New("NonexistentUser")
-	}
-	if err != nil{
-		return err
+	//Verify Customer Exists in DB
+	_, err := self.Database.GetCustomerByID(params.UserID)
+	if err != nil {
+		if err == gosql.ErrNoRows{
+			return errors.New("CustomerDoesntExist")
+		} else {
+			return err
+		}
 	}
 
 	//Verify symbol is valid
-	entityCollection := mongo.GetEntityCollection(mongo.GetDataBase(self.Session))
+	securityID, err := self.Database.CheckIfSecurityInTable(params.Symbol)
 
-	var findEntity entity.Entity
-
-	err = entityCollection.Find(bson.M{"symbol" : params.Symbol}).One(&findEntity)
-
-	if (err == mgo.ErrNotFound){
-		return errors.New("Nonexistent Symbol")
-	}
-	if err != nil{
-		return err
+	if err != nil {
+		if err == gosql.ErrNoRows{
+			return errors.New("SecurityDoesntExist")
+		} else {
+			return err
+		}
 	}
 
+	//If Buy Action
 	//Verify user has enough money to make purchase
-	costOfShares := params.SharesPurchased * params.CostPerShare
-	totalAmount := api.NewMoneyObject(costOfShares)
+	if params.InvestorAction == 0{
+		portfolio, err := self.Database.GetPortfolioByCustomerID(params.UserID)
 
-	if totalAmount > userPortfolio.CashValue {
-		return errors.New("InsufficientFunds")
+		if err != nil{
+			self.Logger.Debug(err.Error())
+			return errors.New("NoPortfolioForCustomer")
+		}
+
+		costOfShares := float64(params.NumShares) * params.CostPerShare
+		totalAmount, exactTotal := model.NewMoneyObject(costOfShares).Float64()
+		portfolioCashValue, exactCash := portfolio.CashValue.Float64()
+
+		if !exactTotal{
+			return errors.New("CostOfSharesUnExact")
+		}
+
+		if !exactCash{
+			return errors.New("PortfolioValueUnExact")
+		}
+
+		if totalAmount > portfolioCashValue {
+			return errors.New("InsufficientFunds")
+		}
+	}else{
+		//If Sell Action
+		//Make sure that user has enough of shares to satisfy transaction
+		userOwnedShare, err := self.Database.GetOwnedShareForUserForSecurity(params.UserID, securityID)
+
+		if err != nil{
+			return errors.New("UserOwnedShareNonExistent")
+		}
+
+		if userOwnedShare.NumShares < params.NumShares{
+			return errors.New("NotEnoughShares")
+		}
 	}
+
 
 	return nil
 }
-
-func (self *OrderController) InsertOrderToDatabase(params OrderCreateParams)(Order, error){
-	//Grab information about security
-	var security security.Security
-
-	securityCollection := mongo.GetSecurityCollection(mongo.GetDataBase(self.Session))
-
-	err := securityCollection.Find(bson.M{"symbol": params.Symbol}).One(&security)
-	if err != nil{
-		return Order{}, err
-	}
-
-	//Insert order
-	orderCollection := mongo.GetOrderBookForSecurity(mongo.GetDataBase(self.Session), params.Symbol)
-	costPerShare := api.NewMoneyObject(params.CostPerShare)
-	costOfShares := api.NewMoneyObject(params.SharesPurchased * params.CostPerShare)
-	systemFee := api.NewMoneyObject(0.0)
-	totalCost := costOfShares.Add(systemFee)
-
-	newOrder := Order{
-		Id: bson.NewObjectId(),
-		Investor: params.UserID,
-		Security: security.Id,
-		Symbol: security.Symbol,
-		Action: params.InvestorAction,
-		InvestorType: params.InvestorType,
-		OrderType: params.OrderType,
-		NumShares: params.SharesPurchased,
-		CostPerShare: costPerShare,
-		CostOfShares: costOfShares,
-		SystemFee: systemFee,
-		TotalCost: totalCost,
-		Created: time.Unix(0, params.TimeCreated),
-		Fulfilled: time.Unix(0, params.TimeCreated),
-		Updated: time.Unix(0, params.TimeCreated),
-		Status: api.Untouched,
-		Transactions: make([]bson.ObjectId, 0),
-		AllowTakers: false,
-		LimitPerShare: api.NewMoneyObject(0.0),
-		TakerFee: api.NewMoneyObject(0.0),
-		StopPrice: api.NewMoneyObject(0.0),
-	}
-
-	insertErr := orderCollection.Insert(newOrder)
-	if insertErr != nil{
-		return Order{}, insertErr
-	}
-	return newOrder, nil
-}
-
+//
+//func (self *OrderController) InsertOrderToDatabase(params OrderCreateParams)(Order, error){
+//	//Grab information about security
+//	var security security.Security
+//
+//	securityCollection := mongo.GetSecurityCollection(mongo.GetDataBase(self.Session))
+//
+//	err := securityCollection.Find(bson.M{"symbol": params.Symbol}).One(&security)
+//	if err != nil{
+//		return Order{}, err
+//	}
+//
+//	//Insert order
+//	orderCollection := mongo.GetOrderBookForSecurity(mongo.GetDataBase(self.Session), params.Symbol)
+//	costPerShare := api.NewMoneyObject(params.CostPerShare)
+//	costOfShares := api.NewMoneyObject(params.SharesPurchased * params.CostPerShare)
+//	systemFee := api.NewMoneyObject(0.0)
+//	totalCost := costOfShares.Add(systemFee)
+//
+//	newOrder := Order{
+//		Id: bson.NewObjectId(),
+//		Investor: params.UserID,
+//		Security: security.Id,
+//		Symbol: security.Symbol,
+//		Action: params.InvestorAction,
+//		InvestorType: params.InvestorType,
+//		OrderType: params.OrderType,
+//		NumShares: params.SharesPurchased,
+//		CostPerShare: costPerShare,
+//		CostOfShares: costOfShares,
+//		SystemFee: systemFee,
+//		TotalCost: totalCost,
+//		Created: time.Unix(0, params.TimeCreated),
+//		Fulfilled: time.Unix(0, params.TimeCreated),
+//		Updated: time.Unix(0, params.TimeCreated),
+//		Status: api.Untouched,
+//		Transactions: make([]bson.ObjectId, 0),
+//		AllowTakers: false,
+//		LimitPerShare: api.NewMoneyObject(0.0),
+//		TakerFee: api.NewMoneyObject(0.0),
+//		StopPrice: api.NewMoneyObject(0.0),
+//	}
+//
+//	insertErr := orderCollection.Insert(newOrder)
+//	if insertErr != nil{
+//		return Order{}, insertErr
+//	}
+//	return newOrder, nil
+//}
+//

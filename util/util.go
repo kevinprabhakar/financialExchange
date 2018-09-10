@@ -56,3 +56,10 @@ func CheckSameDate(time1 time.Time, time2 time.Time)(bool){
 	}
 	return false
 }
+
+func IntAbsVal(x int) (int){
+	if x < 0 {
+		return -1 * x
+	}
+	return x
+}

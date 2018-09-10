@@ -5,12 +5,12 @@ import (
 	"net/http"
 	"encoding/json"
 	"financialExchange/util"
-	"financialExchange/entity"
+	"financialExchange/model"
 )
 
 func CreateEntity(w http.ResponseWriter, r *http.Request){
 	decoder := json.NewDecoder(r.Body)
-	var params entity.CreateEntityParams
+	var params model.CreateEntityParams
 	err := decoder.Decode(&params)
 
 	if err != nil{
@@ -21,8 +21,8 @@ func CreateEntity(w http.ResponseWriter, r *http.Request){
 	err = EntityController.CreateEntity(params)
 
 	if err != nil{
-		http.Error(w, err.Error(), 500)
 		ServerLogger.ErrorMsg(fmt.Sprintf("Error while creating Entity %s: %s", params.Name, err.Error()))
+		http.Error(w, err.Error(), 500)
 		return
 	}
 
@@ -31,7 +31,7 @@ func CreateEntity(w http.ResponseWriter, r *http.Request){
 
 func SignInEntity(w http.ResponseWriter, r *http.Request){
 	decoder := json.NewDecoder(r.Body)
-	var params entity.SignInEntityParams
+	var params model.SignInEntityParams
 	err := decoder.Decode(&params)
 
 	if err != nil{

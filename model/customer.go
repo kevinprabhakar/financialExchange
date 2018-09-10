@@ -1,16 +1,11 @@
-package customer
-
-import (
-	"gopkg.in/mgo.v2/bson"
-)
+package model
 
 type Customer struct{
-	Id 			bson.ObjectId		`json:"id" bson:"_id"`
-	FirstName	string 				`json:"firstName" bson:"firstName"`
-	LastName 	string 				`json:"lastName" bson:"lastName"`
-	Email 		string 				`json:"email" bson:"email"`
-	PassHash	string 				`json:"passHash" bson:"passHash"`
-	Portfolio   bson.ObjectId		`json:"portfolio" bson:"portfolio"`
+	FirstName	string 				`json:"firstName"`
+	LastName 	string 				`json:"lastName"`
+	Email 		string 				`json:"email"`
+	PassHash	string 				`json:"passHash"`
+	Portfolio   int64					`json:"portfolio"`
 }
 
 type CustomerSignUpParams struct {
