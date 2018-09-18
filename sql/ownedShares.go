@@ -38,7 +38,7 @@ func (db *MySqlDB) InsertOwnedShareToTable(ownedShare model.OwnedShare)(int64, e
 
 func ScanOwnedShare(s RowScanner)(model.OwnedShare, error){
 	var(
-		Id 			gosql.NullInt64
+		Id 			int64
 		UserID		gosql.NullInt64
 		Security	gosql.NullInt64
 		NumShares 	gosql.NullInt64
@@ -49,6 +49,7 @@ func ScanOwnedShare(s RowScanner)(model.OwnedShare, error){
 	}
 
 	ownedShare := model.OwnedShare{
+		Id: Id,
 		UserID: UserID.Int64,
 		Security: Security.Int64,
 		NumShares: int(NumShares.Int64),
@@ -58,7 +59,7 @@ func ScanOwnedShare(s RowScanner)(model.OwnedShare, error){
 }
 
 func (db *MySqlDB)GetOwnedShareForUserForSecurity(userID int64, securityId int64)(model.OwnedShare, error){
-	query := `SELECT * FROM ownedShares WHERE userId = ?, security = ?`
+	query := `SELECT * FROM ownedShares WHERE userId = ? AND security = ?`
 
 	row := db.QueryRow(query, userID, securityId)
 
@@ -84,7 +85,7 @@ func (db *MySqlDB) GetAllOwnedSharesForUserID(userID int64)([]model.OwnedShare, 
 
 	for rows.Next(){
 		var (
-			Id				gosql.NullInt64
+			Id				int64
 			Investor 		gosql.NullInt64
 			Security 		gosql.NullInt64
 			NumShares 		gosql.NullInt64
@@ -97,6 +98,7 @@ func (db *MySqlDB) GetAllOwnedSharesForUserID(userID int64)([]model.OwnedShare, 
 		}
 
 		matchOrder := model.OwnedShare{
+			Id: Id,
 			UserID: Investor.Int64,
 			Security: Security.Int64,
 			NumShares: int(NumShares.Int64),

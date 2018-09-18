@@ -7,6 +7,7 @@ import (
 	"errors"
 	gosql "database/sql"
 	"time"
+
 )
 
 type OrderController struct {
@@ -23,21 +24,21 @@ func NewOrderController (database *sql.MySqlDB, logger *util.Logger, ordersOutgo
 	}
 }
 
-func (self *OrderController) CreateOrder(params model.OrderCreateParams)(error){
+func (self *OrderController) CreateOrder(params model.OrderCreateParams)(int64, error){
 	//Validate order fields
 	validErr := self.ValidateOrderFields(params)
 
 	if validErr != nil{
-		return validErr
+		return 0, validErr
 	}
 
 	//Get security by symbol
 	securityId, err := self.Database.CheckIfSecurityInTable(params.Symbol)
 	if err != nil{
-		return errors.New("Invalid Symbol")
+		return 0, errors.New("Invalid Symbol")
 	}
 
-
+	//Create Order
 	orderToInsert := model.Order{
 		Investor: params.UserID,
 		InvestorAction: model.InvestorAction(params.InvestorAction),
@@ -46,6 +47,7 @@ func (self *OrderController) CreateOrder(params model.OrderCreateParams)(error){
 		Security: securityId,
 		Symbol: params.Symbol,
 		NumShares: params.NumShares,
+		NumSharesRemaining: params.NumShares,
 		CostPerShare: model.NewMoneyObject(params.CostPerShare),
 		CostOfShares: model.NewMoneyObject(float64(params.NumShares) * params.CostPerShare),
 		//No system fee... FOR NOW
@@ -63,33 +65,36 @@ func (self *OrderController) CreateOrder(params model.OrderCreateParams)(error){
 	}
 
 	//Insert order into database
-	_, insertErr := self.Database.InsertOrderIntoTable(orderToInsert)
+	insertId, insertErr := self.Database.InsertOrderIntoTable(orderToInsert)
 
 	if insertErr != nil{
-		return insertErr
+		return 0, insertErr
 	}
 
 	//Get matching orders
 	matchingOrders, matchingErr := self.GetMatchingOrders(orderToInsert)
 
 	if matchingErr != nil{
-		return matchingErr
+		return 0, matchingErr
 	}
 
 	//If there are no orders that match requested order, return nil
 	if len(matchingOrders) == 0 {
-		return nil
+		return insertId, nil
 	}else{
+
 		//Filter orders in the array
 		orderToShareMap, filterError := self.FilterMatchingOrders(orderToInsert, matchingOrders)
 
 		if filterError != nil{
-			return filterError
+			if len(orderToShareMap) == 0{
+				return 0, filterError
+			}
 		}
 
 		//Create order transaction set
 		orderTransactionSet := model.OrderTransactionPackage{
-			MainOrder: orderToInsert.ID,
+			MainOrder: insertId,
 			MatchingOrders: orderToShareMap,
 		}
 
@@ -97,17 +102,15 @@ func (self *OrderController) CreateOrder(params model.OrderCreateParams)(error){
 		self.OrdersOutgoing <- orderTransactionSet
 	}
 
-
-	return nil
+	return insertId, nil
 }
 
 
 func (self *OrderController)GetMatchingOrders(order model.Order)([]model.Order, error){
 	matchingOrders := make([]model.Order,0)
 
-	sqlStatement := `SELECT * FROM orders WHERE symbol = ? AND investorAction = ? AND numShares >= ? AND status = ? OR status = ? ORDER BY created`
-
-	rows, err := self.Database.Query(sqlStatement, order.Symbol, util.IntAbsVal(int(order.InvestorAction)-1), order.NumShares, model.InProgress, model.Untouched)
+	sqlStatement := `SELECT * FROM orders WHERE symbol = ? AND investorAction = ? AND numSharesRemaining >= ? AND (status = ? OR status = ?) ORDER BY created`
+	rows, err := self.Database.Query(sqlStatement, order.Symbol, util.IntAbsVal(int(order.InvestorAction)-1), 0, model.InProgress, model.Untouched)
 
 	if err != nil{
 		return matchingOrders, err
@@ -117,7 +120,7 @@ func (self *OrderController)GetMatchingOrders(order model.Order)([]model.Order, 
 
 	for rows.Next(){
 		var (
-			Id				gosql.NullInt64
+			Id				int64
 			Investor 		gosql.NullInt64
 			Security 		gosql.NullInt64
 			Symbol 			gosql.NullString
@@ -125,6 +128,7 @@ func (self *OrderController)GetMatchingOrders(order model.Order)([]model.Order, 
 			InvestorType	gosql.NullInt64
 			OrderType		gosql.NullInt64
 			NumShares 		gosql.NullInt64
+			NumSharesRemaining	gosql.NullInt64
 			CostPerShare	gosql.NullFloat64
 			CostOfShares	gosql.NullFloat64
 			SystemFee 		gosql.NullFloat64
@@ -140,7 +144,7 @@ func (self *OrderController)GetMatchingOrders(order model.Order)([]model.Order, 
 		)
 
 		err := rows.Scan(&Id , &Investor , &Security , &Symbol , &InvestorAction , &InvestorType , &OrderType , &NumShares ,
-			&CostPerShare , &CostOfShares , &SystemFee , &TotalCost , &Created , &Updated , &Fulfilled , &Status ,
+			&NumSharesRemaining, &CostPerShare , &CostOfShares , &SystemFee , &TotalCost , &Created , &Updated , &Fulfilled , &Status ,
 			&AllowTakers , &LimitPerShare , &TakerFee, &StopPrice)
 
 		if err != nil{
@@ -148,6 +152,7 @@ func (self *OrderController)GetMatchingOrders(order model.Order)([]model.Order, 
 		}
 
 		matchOrder := model.Order{
+			ID: Id,
 			Investor: Investor.Int64,
 			Security: Security.Int64,
 			Symbol: Symbol.String,
@@ -155,6 +160,7 @@ func (self *OrderController)GetMatchingOrders(order model.Order)([]model.Order, 
 			InvestorType: model.InvestorType(InvestorType.Int64),
 			OrderType: model.OrderType(OrderType.Int64),
 			NumShares: int(NumShares.Int64),
+			NumSharesRemaining: int(NumSharesRemaining.Int64),
 			CostPerShare: model.NewMoneyObject(CostPerShare.Float64),
 			CostOfShares: model.NewMoneyObject(CostOfShares.Float64),
 			SystemFee: model.NewMoneyObject(SystemFee.Float64),
@@ -183,6 +189,12 @@ func (self *OrderController) FilterMatchingOrders(currOrder model.Order, matchin
 	numShares := currOrder.NumShares
 
 	workingNumShares := 0
+	sqlQuery := `UPDATE orders SET status = ?, updated = ? WHERE id = ?`
+
+	tx, err := self.Database.Begin()
+	if err != nil{
+		return map[int64]int{}, err
+	}
 
 	for _, order := range(matchingOrders){
 		//If we haven't exceeded total amount of allotted shares
@@ -191,17 +203,31 @@ func (self *OrderController) FilterMatchingOrders(currOrder model.Order, matchin
 			sharesRemaining := numShares - workingNumShares
 
 			//If the current order examined has more shares than we need allocated
-			if order.NumShares > sharesRemaining{
-				//Assign those shares and exit
+			if order.NumSharesRemaining >= sharesRemaining{
+				//Assign those shares
 				orderToShareMap[order.ID] = sharesRemaining
+				//Mark order as In Progress
+				_, err := tx.Exec(sqlQuery, 1, time.Now().Unix(),order.ID)
+				if err != nil{
+					tx.Rollback()
+					return map[int64]int{}, err
+				}
+
 				workingNumShares = numShares
+				//Exit
 				break
 			//If current order examined has less shares than we need allocated
 			}else{
 				//Grab all the shares from this order
-				orderToShareMap[order.ID] = order.NumShares
+				orderToShareMap[order.ID] = order.NumSharesRemaining
+				//Mark order as In Progress
+				_, err := tx.Exec(sqlQuery, 1, time.Now().Unix(),order.ID)
+				if err != nil{
+					tx.Rollback()
+					return map[int64]int{}, err
+				}
 				//Increment workingNumShares
-				workingNumShares += order.NumShares
+				workingNumShares += order.NumSharesRemaining
 				//Examine next order in next iteration of loop
 			}
 		}
@@ -213,6 +239,18 @@ func (self *OrderController) FilterMatchingOrders(currOrder model.Order, matchin
 
 	if numShares != workingNumShares{
 		return orderToShareMap, errors.New("OrderPartiallyMatched")
+	}
+
+	_, err = tx.Exec(sqlQuery, 1, time.Now().Unix(), currOrder.ID)
+	if err != nil{
+		tx.Rollback()
+		return map[int64]int{}, err
+	}
+
+	err = tx.Commit()
+	if err != nil{
+		tx.Rollback()
+		return map[int64]int{}, err
 	}
 
 	return orderToShareMap, nil
@@ -255,7 +293,6 @@ func (self *OrderController) ValidateOrderFields(params model.OrderCreateParams)
 	//Verify user has enough money to make purchase
 	if params.InvestorAction == 0{
 		portfolio, err := self.Database.GetPortfolioByCustomerID(params.UserID)
-
 		if err != nil{
 			self.Logger.Debug(err.Error())
 			return errors.New("NoPortfolioForCustomer")
@@ -286,6 +323,7 @@ func (self *OrderController) ValidateOrderFields(params model.OrderCreateParams)
 		}
 
 		if userOwnedShare.NumShares < params.NumShares{
+
 			return errors.New("NotEnoughShares")
 		}
 	}

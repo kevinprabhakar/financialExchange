@@ -10,6 +10,8 @@ type Order struct{
 	InvestorType 	InvestorType 			`json:"investorType"`
 	OrderType 		OrderType				`json:"orderType"`
 	NumShares 		int							`json:"numShares"`
+	NumSharesRemaining	int 				`json:"numSharesRemaining"`
+	//Implement numSharesRemaining
 	CostPerShare	Money					`json:"costPerShare"`
 	CostOfShares	Money 					`json:"costOfShares"`
 	SystemFee 		Money 					`json:"systemFee"`
@@ -47,6 +49,10 @@ type OrderCreateParams struct{
 	AllowTakers 		bool 					`json:"allowTakers"`
 	LimitPerShare		float64 				`json:"limitPerShare"`
 	StopPrice 			float64 				`json:"stopPrice"`
+}
+
+type OrderId struct{
+	Id 			int64 							`json:"orderID"`
 }
 
 type OrderTransactionPackage struct{

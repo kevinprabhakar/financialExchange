@@ -16,6 +16,7 @@ func (db *MySqlDB) CreateOrderTable()(error){
 		"investorType integer," +
 		"orderType integer," +
 		"numShares integer," +
+		"numSharesRemaining integer," +
 		"costPerShare float," +
 		"costOfShares float," +
 		"systemFee float," +
@@ -37,12 +38,12 @@ func (db *MySqlDB) CreateOrderTable()(error){
 
 func (db *MySqlDB)InsertOrderIntoTable(order model.Order) (int64, error){
 	query := `INSERT INTO orders (
-		investor, security, symbol, investorAction, investorType, orderType, numShares, costPerShare, costOfShares, systemFee,
+		investor, security, symbol, investorAction, investorType, orderType, numShares, numSharesRemaining, costPerShare, costOfShares, systemFee,
 		totalCost, created, updated, fulfilled, status, allowTakers, limitPerShare, takerFee, stopPrice
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	r, err := db.Exec(query, order.Investor, order.Security, order.Symbol, order.InvestorAction, order.InvestorType, order.OrderType,
-			order.NumShares, order.CostPerShare, order.CostOfShares, order.SystemFee, order.TotalCost, order.Created, order.Updated, order.Fulfilled,
+			order.NumShares, order.NumSharesRemaining, order.CostPerShare, order.CostOfShares, order.SystemFee, order.TotalCost, order.Created, order.Updated, order.Fulfilled,
 			order.Status, order.AllowTakers, order.LimitPerShare, order.TakerFee, order.StopPrice)
 
 	if err != nil{
@@ -67,6 +68,7 @@ func ScanOrder(s RowScanner)(*model.Order, error){
 		InvestorType	sql.NullInt64
 		OrderType		sql.NullInt64
 		NumShares 		sql.NullInt64
+		NumSharesRemaining sql.NullInt64
 		CostPerShare	sql.NullFloat64
 		CostOfShares	sql.NullFloat64
 		SystemFee 		sql.NullFloat64
@@ -81,7 +83,7 @@ func ScanOrder(s RowScanner)(*model.Order, error){
 		StopPrice		sql.NullFloat64
 	)
 	if err := s.Scan(&Id , &Investor , &Security , &Symbol , &InvestorAction , &InvestorType , &OrderType , &NumShares ,
-		&CostPerShare , &CostOfShares , &SystemFee , &TotalCost , &Created , &Updated , &Fulfilled , &Status ,
+		&NumSharesRemaining, &CostPerShare , &CostOfShares , &SystemFee , &TotalCost , &Created , &Updated , &Fulfilled , &Status ,
 		&AllowTakers , &LimitPerShare , &TakerFee, &StopPrice); err != nil{
 		return nil, err
 	}
@@ -95,6 +97,7 @@ func ScanOrder(s RowScanner)(*model.Order, error){
 		InvestorType: model.InvestorType(InvestorType.Int64),
 		OrderType: model.OrderType(OrderType.Int64),
 		NumShares: int(NumShares.Int64),
+		NumSharesRemaining: int(NumSharesRemaining.Int64),
 		CostPerShare: model.NewMoneyObject(CostPerShare.Float64),
 		CostOfShares: model.NewMoneyObject(CostOfShares.Float64),
 		SystemFee: model.NewMoneyObject(SystemFee.Float64),
@@ -122,4 +125,15 @@ func (db *MySqlDB)GetOrderById(id int64)(*model.Order, error){
 		return nil, err
 	}
 	return user, nil
+}
+
+func (db *MySqlDB)UpdateOrderStatus(orderID int64, status model.CompletionStatus)(error){
+	sqlQuery := `UPDATE orders SET status = ? WHERE id = ?`
+
+	_, err := db.Exec(sqlQuery, status, orderID)
+
+	if err != nil {
+		return err
+	}
+	return nil
 }

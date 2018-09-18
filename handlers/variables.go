@@ -9,6 +9,8 @@ import (
 	"financialExchange/entity"
 	"financialExchange/order"
 	"financialExchange/model"
+	"financialExchange/transaction"
+	"fmt"
 )
 
 type AccessToken struct{
@@ -19,7 +21,9 @@ var ServerLogger *util.Logger
 var CustomerController *customer.CustomerController
 var EntityController *entity.EntityController
 var OrderController *order.OrderController
+var TransactionController *transaction.TransactionController
 var TransactionChannel chan model.OrderTransactionPackage
+var ErrorChannel chan error
 
 func init(){
 	DBConn, err := sql.OpenDatabase("exchange")
@@ -30,15 +34,17 @@ func init(){
 	}
 
 	TransactionChannel = make(chan model.OrderTransactionPackage, 100)
+	ErrorChannel = make(chan error, 100)
+	ServerLogger = util.NewLogger(ioutil.Discard, os.Stdout, os.Stdout, os.Stderr)
+
 
 	CustomerController = customer.NewCustomerController(ServerLogger, DBConn)
 	EntityController = entity.NewEntityController(DBConn, ServerLogger)
 	OrderController = order.NewOrderController(DBConn, ServerLogger, TransactionChannel)
+	TransactionController = transaction.NewTransactionController(DBConn, ServerLogger, TransactionChannel, ErrorChannel)
 
-	ServerLogger = util.NewLogger(ioutil.Discard, os.Stdout, os.Stdout, os.Stderr)
 
-	//defer DBConn.DB.Close()
-
+	//Database Table Creation
 	err = DBConn.CreateCustomerTable()
 	if err != nil{
 		ServerLogger.ErrorMsg(err.Error())
@@ -72,7 +78,26 @@ func init(){
 	err = DBConn.CreateOwnedSharesTable()
 	if err != nil{
 		ServerLogger.ErrorMsg(err.Error())
+		return
 	}
+
+	err = DBConn.CreateTransactionTable()
+	if err != nil{
+		ServerLogger.ErrorMsg(err.Error())
+		return
+	}
+
+	//Go Routines
+
+	//Handling Matched Orders (Runs indefinitely)
+	go TransactionController.HandleMatchedOrders()
+
+	go func(errorChan chan error){
+		for err := range errorChan{
+			ServerLogger.ErrorMsg(fmt.Sprintf("Error while matching transactions: %s", err.Error()))
+			return
+		}
+	}(ErrorChannel)
 }
 
 

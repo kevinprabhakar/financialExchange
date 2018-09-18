@@ -38,3 +38,7 @@ func NewMoneyObject(amount float64) (Money){
 	quantity := decimal.NewFromFloat(amount)
 	return Money{quantity}
 }
+
+func NewMoneyObjectFromDecimal(amount decimal.Decimal)(Money){
+	return Money{amount}
+}

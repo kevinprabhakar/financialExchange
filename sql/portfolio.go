@@ -41,7 +41,7 @@ func (db *MySqlDB) InsertPortfolioToTable(portfolio model.Portfolio)(int64, erro
 
 func ScanPortfolio(s RowScanner)(*model.Portfolio, error){
 	var (
-		id 		sql.NullInt64
+		id 		int64
 		Customer sql.NullInt64
 		Value	sql.NullFloat64
 		StockValue 	sql.NullFloat64
@@ -55,7 +55,7 @@ func ScanPortfolio(s RowScanner)(*model.Portfolio, error){
 	portfolio := &model.Portfolio{
 		Customer: Customer.Int64,
 		Value: model.NewMoneyObject(Value.Float64),
-		StockValue: model.NewMoneyObject(Value.Float64),
+		StockValue: model.NewMoneyObject(StockValue.Float64),
 		CashValue: model.NewMoneyObject(CashValue.Float64),
 		WithdrawableFunds: model.NewMoneyObject(WithdrawableFunds.Float64),
 	}
