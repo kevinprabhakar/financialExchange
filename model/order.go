@@ -59,3 +59,8 @@ type OrderTransactionPackage struct{
 	MainOrder 			int64 					`json:"mainOrder"`
 	MatchingOrders 		map[int64]int 			`json:"matchingOrders"`
 }
+
+type IPOParams struct{
+	SharePrice 			float64 			`json:"sharePrice"`
+	NumShares 			int 			`json:"numShares"`
+}

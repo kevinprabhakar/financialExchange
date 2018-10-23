@@ -67,9 +67,12 @@ func (self *TransactionController) HandleMatchedOrders(){
 		transactionToBeInserted := model.Transaction{
 			OrderPlaced: mainOrder.ID,
 			OrdersFulfilling: fulfillingOrdersIDs,
+			NumShares: int64(mainOrder.NumShares),
 			TotalCost: mainOrder.TotalCost,
+			CostPerShare: mainOrder.CostPerShare,
 			//System Fee is 0...FOR NOW
 			SystemFee: model.NewMoneyObject(0.0),
+			Security: mainOrder.Security,
 			Created: time.Now().Unix(),
 		}
 
@@ -101,7 +104,6 @@ func (self *TransactionController)UpdateMainAndFulfillingOrders(mainOrder model.
 	updateStatusQuery := `UPDATE orders SET status = ?, fulfilled = ? WHERE id = ?`
 	sqlQueryInsertOwnedShare := `INSERT INTO ownedShares (userId, security, numShares) VALUES ( ?, ?, ? )`
 
-
 	for _, order := range fulfillingOrders{
 		ownedShareForUser, err := self.Database.GetOwnedShareForUserForSecurity(order.Investor, order.Security)
 		//Check to see if fulfillingOrder has an OwnedShare
@@ -131,6 +133,7 @@ func (self *TransactionController)UpdateMainAndFulfillingOrders(mainOrder model.
 			return err
 		}
 
+
 		//For each fulfilling order, update ownedShares, stockValue, and cashValue of user
 		if mainOrder.InvestorAction == 0{
 			//If Main Order is Buy, Fulfilling Orders are sells
@@ -153,8 +156,6 @@ func (self *TransactionController)UpdateMainAndFulfillingOrders(mainOrder model.
 				return err
 			}
 
-
-
 			//Update Portfolio Amounts
 			updatePortfolioAmounts := `UPDATE portfolios SET stockValue = ?, cashValue = ?, value = ? WHERE customer = ?`
 			_, err = tx.Exec(updatePortfolioAmounts, newStockValue, newCashValue, newTotalValue, order.Investor)
@@ -162,9 +163,6 @@ func (self *TransactionController)UpdateMainAndFulfillingOrders(mainOrder model.
 				tx.Rollback()
 				return err
 			}
-
-
-
 
 			//Update Order Book
 			updateOrderBook := `UPDATE orders SET numSharesRemaining = ? WHERE id = ?`

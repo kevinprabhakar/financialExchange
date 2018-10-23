@@ -6,8 +6,11 @@ import (
 	"financialExchange/sql"
 	"errors"
 	gosql "database/sql"
+	"golang.org/x/net/html"
+
 	"time"
 
+	"fmt"
 )
 
 type OrderController struct {
@@ -54,9 +57,9 @@ func (self *OrderController) CreateOrder(params model.OrderCreateParams)(int64, 
 		SystemFee: model.NewMoneyObject(0.0),
 		//Total Cost = (Cost of Shares * Cost Per Share) + 0.0
 		TotalCost: model.NewMoneyObject((float64(params.NumShares) * params.CostPerShare)+0.0),
-		Created: time.Now().Unix(),
-		Updated: time.Now().Unix(),
-		Fulfilled: time.Now().Unix(),
+		Created: params.TimeCreated,
+		Updated: params.TimeCreated,
+		Fulfilled: params.TimeCreated,
 		Status: model.Untouched,
 		AllowTakers: params.AllowTakers,
 		LimitPerShare: model.NewMoneyObject(params.LimitPerShare),
@@ -84,9 +87,10 @@ func (self *OrderController) CreateOrder(params model.OrderCreateParams)(int64, 
 	}else{
 
 		//Filter orders in the array
-		orderToShareMap, filterError := self.FilterMatchingOrders(orderToInsert, matchingOrders)
+		orderToShareMap, filterError := self.FilterMatchingOrders(orderToInsert.NumShares, insertId, matchingOrders)
 
 		if filterError != nil{
+			fmt.Println(filterError.Error())
 			if len(orderToShareMap) == 0{
 				return 0, filterError
 			}
@@ -182,11 +186,11 @@ func (self *OrderController)GetMatchingOrders(order model.Order)([]model.Order, 
 
 }
 
-func (self *OrderController) FilterMatchingOrders(currOrder model.Order, matchingOrders []model.Order)(map[int64]int, error){
+func (self *OrderController) FilterMatchingOrders(currOrderNumShares int, currOrderID int64, matchingOrders []model.Order)(map[int64]int, error){
 	//All orders sorted by timestamp in FIFO style
 	orderToShareMap := make(map[int64]int, 0)
 
-	numShares := currOrder.NumShares
+	numShares := currOrderNumShares
 
 	workingNumShares := 0
 	sqlQuery := `UPDATE orders SET status = ?, updated = ? WHERE id = ?`
@@ -237,11 +241,7 @@ func (self *OrderController) FilterMatchingOrders(currOrder model.Order, matchin
 		return map[int64]int{}, errors.New("NoMatchingOrder")
 	}
 
-	if numShares != workingNumShares{
-		return orderToShareMap, errors.New("OrderPartiallyMatched")
-	}
-
-	_, err = tx.Exec(sqlQuery, 1, time.Now().Unix(), currOrder.ID)
+	_, err = tx.Exec(sqlQuery, 1, time.Now().Unix(), currOrderID)
 	if err != nil{
 		tx.Rollback()
 		return map[int64]int{}, err
@@ -251,6 +251,10 @@ func (self *OrderController) FilterMatchingOrders(currOrder model.Order, matchin
 	if err != nil{
 		tx.Rollback()
 		return map[int64]int{}, err
+	}
+
+	if numShares != workingNumShares{
+		return orderToShareMap, errors.New("OrderPartiallyMatched")
 	}
 
 	return orderToShareMap, nil
@@ -330,6 +334,134 @@ func (self *OrderController) ValidateOrderFields(params model.OrderCreateParams)
 
 
 	return nil
+}
+
+func (self *OrderController)CreateAssocUserForEntity(entity model.Entity, params model.IPOParams)(int64, error){
+	_, doesCustomerExist := self.Database.CheckIfCustomerInTable(entity.Email)
+
+	if doesCustomerExist != nil {
+		if doesCustomerExist == gosql.ErrNoRows{
+		} else{
+			return 0, doesCustomerExist
+		}
+	}
+
+	//First insert user
+	newUser := model.Customer{
+		FirstName	: entity.Name,
+		PassHash	: entity.PassHash,
+		Email 		: html.EscapeString(entity.Email),
+		Portfolio	: 0,
+	}
+
+	userId, insertErr := self.Database.InsertCustomerIntoTable(newUser)
+
+	if (insertErr != nil){
+		return 0, insertErr
+	}
+
+	//Next insert new user portfolio
+	//To start out with, each user will get $100.00 (Set at value and Cash Value)
+	//This is solely for testing purposes
+	//In the future, stripe integration will let us draw money from credit cards
+	newUserPortfolio := model.Portfolio{
+		Customer: userId,
+		//Value = (Stock + Cash + Withdrawables)
+		Value: model.NewMoneyObject(float64(params.NumShares) * params.SharePrice),
+		StockValue: model.NewMoneyObject(float64(params.NumShares) * params.SharePrice),
+		CashValue: model.NewMoneyObject(0.0),
+		WithdrawableFunds: model.NewMoneyObject(0.0),
+	}
+
+	portfolioId, err := self.Database.InsertPortfolioToTable(newUserPortfolio)
+
+	if err != nil{
+		return 0, err
+	}
+
+	//Now update user to link it to the just created Portfolio
+	updateErr := self.Database.AttachPortfolioToCustomer(userId, portfolioId)
+	if updateErr != nil{
+		return 0, err
+	}
+
+	ownedShareForIPO := model.OwnedShare{
+		UserID: userId,
+		Security: entity.Security,
+		NumShares: params.NumShares,
+	}
+
+	_, ownedShareUpdateErr := self.Database.InsertOwnedShareToTable(ownedShareForIPO)
+	if ownedShareUpdateErr != nil{
+		return 0, err
+	}
+
+	return userId, nil
+}
+
+
+func (self *OrderController)IPO(params model.IPOParams, entityID int64)(int64, error){
+	entity, err := self.Database.GetEntityByID(entityID)
+	if err != nil{
+		return 0, err
+	}
+
+	if entity.IPO == 1{
+		return 0, errors.New(fmt.Sprintf("IPO for entity %d already happened", entityID))
+	}
+
+	if entity.Security == -1{
+		return 0, errors.New(fmt.Sprintf("Entity %d does not have associated security", entityID))
+	}
+
+	security, err := self.Database.GetSecurityByEntityID(entityID)
+	if err != nil{
+		return 0, err
+	}
+
+	assocUser, assocUserErr := self.CreateAssocUserForEntity(*entity, params)
+
+	if assocUserErr != nil{
+		return 0, assocUserErr
+	}
+
+	updateErr := self.Database.UpdateEntityWithAssocUser(entityID, assocUser)
+	if updateErr != nil{
+		return 0, updateErr
+	}
+
+
+	IPOOrder := model.Order{
+		Investor: assocUser,
+		Security: entity.Security,
+		Symbol: security.Symbol,
+		InvestorAction: 1,
+		InvestorType: 0,
+		OrderType: 0,
+		NumShares: params.NumShares,
+		NumSharesRemaining: params.NumShares,
+		CostPerShare: model.NewMoneyObject(params.SharePrice),
+		CostOfShares: model.NewMoneyObject(params.SharePrice*float64(params.NumShares)),
+		SystemFee: model.NewMoneyObject(0.0),
+		Created: time.Now().Unix(),
+		Updated: time.Now().Unix(),
+		Fulfilled: time.Now().Unix(),
+		Status: model.CompletionStatus(0),
+	}
+
+	IPOOrder.TotalCost = model.NewMoneyObjectFromDecimal(IPOOrder.CostOfShares.Add(IPOOrder.SystemFee.Decimal))
+
+	orderID, err := self.Database.InsertOrderIntoTable(IPOOrder)
+	if err != nil{
+		return 0, err
+	}
+
+	err = self.Database.CompleteEntityIPO(entityID)
+	if err != nil{
+		return 0, err
+	}
+
+	return orderID, nil
 }
 //
 //func (self *OrderController) InsertOrderToDatabase(params OrderCreateParams)(Order, error){

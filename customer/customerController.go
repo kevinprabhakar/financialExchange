@@ -7,6 +7,7 @@ import (
 	"financialExchange/model"
 	"financialExchange/sql"
 	gosql "database/sql"
+	"strconv"
 )
 
 type CustomerController struct {
@@ -66,9 +67,9 @@ func (self *CustomerController)SignUp(SignUpParams model.CustomerSignUpParams)(e
 	newUserPortfolio := model.Portfolio{
 		Customer: userId,
 		//Value = (Stock + Cash + Withdrawables)
-		Value: model.NewMoneyObject(100.0),
+		Value: model.NewMoneyObject(0.0),
 		StockValue: model.NewMoneyObject(0.0),
-		CashValue: model.NewMoneyObject(100.0),
+		CashValue: model.NewMoneyObject(0.0),
 		WithdrawableFunds: model.NewMoneyObject(0.0),
 	}
 
@@ -115,12 +116,31 @@ func (self *CustomerController)SignIn(SignInParams model.CustomerSignInParams)(s
 	}
 
 	//Return access token for usage
-	accessToken, err := util.GetAccessToken(userObj.Email)
+	accessToken, err := util.GetAccessToken(strconv.FormatInt(userObj.Id,10))
 	if err != nil{
 		return "", err
 	}
 
 	return accessToken, nil
+}
+
+func (self *CustomerController) GetCurrUserPortfolio(accessToken string)(*model.Portfolio, error){
+	uid, err := util.VerifyAccessToken(accessToken)
+	if err != nil{
+		return nil, err
+	}
+
+	int64form, err := strconv.ParseInt(uid, 10, 64)
+	if err != nil{
+		return nil, errors.New("InvalidUID")
+	}
+
+	portfolio, err := self.Database.GetPortfolioByCustomerID(int64form)
+	if err != nil{
+		return nil, errors.New("NoPortfolioForCustomer")
+	}
+
+	return portfolio, nil
 }
 
 func (self *CustomerController)GetCurrUser(accessToken string)(*model.Customer, error){
@@ -129,7 +149,13 @@ func (self *CustomerController)GetCurrUser(accessToken string)(*model.Customer, 
 	if (err != nil){
 		return nil, err
 	}
-	userObj, findErr := self.Database.GetCustomerByEmail(uid)
+
+	intForm, err := strconv.ParseInt(uid, 10, 64)
+	if err != nil{
+		return nil, err
+	}
+
+	userObj, findErr := self.Database.GetCustomerByID(intForm)
 
 	if (findErr != nil){
 		return nil, findErr
@@ -138,6 +164,85 @@ func (self *CustomerController)GetCurrUser(accessToken string)(*model.Customer, 
 	return userObj, nil
 }
 
+func (self *CustomerController)GetOrdersForUser(accessToken string)(*[]model.Order, error){
+	uid, err := util.VerifyAccessToken(accessToken)
+
+	if err != nil{
+		return nil, err
+	}
+
+	sqlStatement := `SELECT * FROM orders WHERE investor = ? ORDER BY created`
+	rows, err := self.Database.Query(sqlStatement, uid)
+
+	if err != nil{
+		return nil, err
+	}
+
+	userOrders := make([]model.Order,0)
+
+	defer rows.Close()
+
+	for rows.Next(){
+		var (
+			Id				int64
+			Investor 		gosql.NullInt64
+			Security 		gosql.NullInt64
+			Symbol 			gosql.NullString
+			InvestorAction	gosql.NullInt64
+			InvestorType	gosql.NullInt64
+			OrderType		gosql.NullInt64
+			NumShares 		gosql.NullInt64
+			NumSharesRemaining	gosql.NullInt64
+			CostPerShare	gosql.NullFloat64
+			CostOfShares	gosql.NullFloat64
+			SystemFee 		gosql.NullFloat64
+			TotalCost 		gosql.NullFloat64
+			Created 		gosql.NullInt64
+			Updated 		gosql.NullInt64
+			Fulfilled 		gosql.NullInt64
+			Status 			gosql.NullInt64
+			AllowTakers 	gosql.NullBool
+			LimitPerShare 	gosql.NullFloat64
+			TakerFee		gosql.NullFloat64
+			StopPrice		gosql.NullFloat64
+		)
+
+		err := rows.Scan(&Id , &Investor , &Security , &Symbol , &InvestorAction , &InvestorType , &OrderType , &NumShares ,
+			&NumSharesRemaining, &CostPerShare , &CostOfShares , &SystemFee , &TotalCost , &Created , &Updated , &Fulfilled , &Status ,
+			&AllowTakers , &LimitPerShare , &TakerFee, &StopPrice)
+
+		if err != nil{
+			return nil, err
+		}
+
+		matchOrder := model.Order{
+			ID: Id,
+			Investor: Investor.Int64,
+			Security: Security.Int64,
+			Symbol: Symbol.String,
+			InvestorAction: model.InvestorAction(InvestorAction.Int64),
+			InvestorType: model.InvestorType(InvestorType.Int64),
+			OrderType: model.OrderType(OrderType.Int64),
+			NumShares: int(NumShares.Int64),
+			NumSharesRemaining: int(NumSharesRemaining.Int64),
+			CostPerShare: model.NewMoneyObject(CostPerShare.Float64),
+			CostOfShares: model.NewMoneyObject(CostOfShares.Float64),
+			SystemFee: model.NewMoneyObject(SystemFee.Float64),
+			TotalCost: model.NewMoneyObject(TotalCost.Float64),
+			Created: Created.Int64,
+			Updated: Updated.Int64,
+			Fulfilled: Fulfilled.Int64,
+			Status: model.CompletionStatus(Status.Int64),
+			AllowTakers: AllowTakers.Bool,
+			LimitPerShare: model.NewMoneyObject(LimitPerShare.Float64),
+			TakerFee: model.NewMoneyObject(LimitPerShare.Float64),
+			StopPrice: model.NewMoneyObject(StopPrice.Float64),
+		}
+
+		userOrders = append(userOrders, matchOrder)
+	}
+	return &userOrders, nil
+}
 //func (self *CustomerController)GetUsers(params string)(*[]Customer, error){
 //	dec := json.NewDecoder(strings.NewReader(params))
 //	var userIds UserIdList

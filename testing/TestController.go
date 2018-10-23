@@ -12,6 +12,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"errors"
+	"strconv"
+	"financialExchange/order"
+	"math"
 )
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
@@ -39,7 +42,7 @@ func RandSeq(n int) string {
 }
 
 func (self *TestController)DropAllTables()(error){
-	tableNames := []string{"customers","orders","entities","ownedShares","portfolios","securities","transactions"}
+	tableNames := []string{"customers","orders","entities","ownedShares","portfolios","securities","transactions","fulfillingOrders"}
 
 	tx, err := self.Db.Begin()
 	if err != nil{
@@ -114,6 +117,12 @@ func (self *TestController)CreateAllTables()(error){
 	err = self.Db.CreateTransactionTable()
 	if err != nil{
 		self.Logger.ErrorMsg("Error Creating Transaction Table")
+
+		return err
+	}
+	err = self.Db.CreateFulfillingOrdersTable()
+	if err != nil{
+		self.Logger.ErrorMsg("Error Creating FulfillingOrders Table")
 
 		return err
 	}
@@ -236,7 +245,22 @@ func (self *TestController)CreateEntityWithSecurity()(int64, int64, string, erro
 	}
 
 	return entityId, securityId, newSecurity.Symbol, nil
+}
 
+func (self *TestController)IPOEntity(entityID int64)(int64, error){
+	newChannel := make(chan model.OrderTransactionPackage, 0)
+	OrderController := order.NewOrderController(self.Db, self.Logger, newChannel)
+	IPOParams := model.IPOParams{
+		SharePrice: 100.00,
+		NumShares: 40000,
+	}
+
+	orderID, err := OrderController.IPO(IPOParams, entityID)
+	if err != nil{
+		return 0, err
+	}
+
+	return orderID, nil
 }
 
 func (self *TestController)GiveUserStock(userId int64, security int64, numShares int, price model.Money)(error){
@@ -270,6 +294,7 @@ func (self *TestController)GiveUserStock(userId int64, security int64, numShares
 	return nil
 }
 
+
 func (self *TestController)PlaceBuyOrderForUser(userId int64, security int64, symbol string, price model.Money, numShares int)(int64, error){
 	stockPrice, _ := price.Float64()
 
@@ -297,8 +322,75 @@ func (self *TestController)PlaceBuyOrderForUser(userId int64, security int64, sy
 
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(byteForm))
 
+	accessToken, err := util.GetAccessToken(strconv.FormatInt(userId, 10))
+	if err != nil{
+		self.Logger.ErrorMsg("Error getting access token for user")
+		return 0, err
+	}
+
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Cache-Control", "no-cache")
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil{
+		self.Logger.ErrorMsg("Error placing buy order")
+		return 0, err
+	}
+
+	defer res.Body.Close()
+	body, _ := ioutil.ReadAll(res.Body)
+
+	if res.StatusCode != 200{
+		return 0, errors.New("Error: "+ string(body))
+	}
+
+	var orderIdStruct model.OrderId
+
+	err = json.Unmarshal(body, &orderIdStruct)
+	if err != nil{
+		return 0, err
+	}
+
+	return orderIdStruct.Id, nil
+}
+
+func (self *TestController)PlaceBuyOrderForUserWithSpecTime(userId int64, security int64, symbol string, price model.Money, numShares int, timeCreated int64)(int64, error){
+	stockPrice, _ := price.Float64()
+
+	url := "http://localhost:3001/api/order"
+
+	newOrderParams := model.OrderCreateParams{
+		UserID: userId,
+		InvestorAction: 0,
+		InvestorType: 0,
+		OrderType: 0,
+		Symbol: symbol,
+		NumShares: numShares,
+		CostPerShare: stockPrice,
+		TimeCreated: timeCreated,
+		AllowTakers: true,
+		LimitPerShare: 0.0,
+		StopPrice: 0.0,
+	}
+
+	byteForm, err := json.Marshal(newOrderParams)
+	if err != nil{
+		self.Logger.ErrorMsg("Error decoding JSON order params")
+		return 0, err
+	}
+
+	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(byteForm))
+
+	accessToken, err := util.GetAccessToken(strconv.FormatInt(userId, 10))
+	if err != nil{
+		self.Logger.ErrorMsg("Error getting access token for user")
+		return 0, err
+	}
+
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Cache-Control", "no-cache")
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", accessToken))
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil{
@@ -350,8 +442,15 @@ func (self *TestController)PlaceSellOrderForUser(userId int64, security int64, s
 
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(byteForm))
 
+	accessToken, err := util.GetAccessToken(strconv.FormatInt(userId, 10))
+	if err != nil{
+		self.Logger.ErrorMsg("Error getting access token for user")
+		return 0, err
+	}
+
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Cache-Control", "no-cache")
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", accessToken))
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil{
@@ -374,4 +473,71 @@ func (self *TestController)PlaceSellOrderForUser(userId int64, security int64, s
 	}
 
 	return orderIdStruct.Id, nil
+}
+
+func(self *TestController)Brownian(seed int64, N float64)([]float64, []float64){
+	r2 := rand.New(rand.NewSource(seed))
+	dt := 1./N
+	bVals := make([]float64, 0)
+	totalSum := make([]float64, 0)
+	for i := 0; i < int(N); i++{
+		b := r2.NormFloat64() * math.Sqrt(dt)
+		if len(totalSum) == 0{
+			totalSum = append(totalSum, b)
+		}else{
+			totalSum = append(totalSum, totalSum[len(totalSum)-1]+b)
+		}
+		bVals = append(bVals, b)
+	}
+	bVals = append([]float64{0.0}, bVals...)
+	return totalSum, bVals
+}
+
+func(self *TestController)GeometricBrownianMotion(s0 float64, mu float64, sigma float64, t float64, N float64)([]float64, []float64, error){
+	linSpace := make([]float64, 0)
+	for i := float64(0); i <= N; i += 1 {
+		linSpace = append(linSpace, i/N)
+	}
+	S := make([]float64, 0)
+	S = append(S, s0)
+
+	W, _ := self.Brownian(time.Now().Unix(), N)
+
+	for i := float64(1); i <= N; i++{
+		drift := (mu - 0.5 * math.Pow(sigma, 2.0)) * linSpace[int(i)]
+		diffusion := sigma * W[int(i)-1]
+		S_temp := s0 * math.Exp(drift + diffusion)
+		S = append(S, S_temp)
+	}
+
+	return S, linSpace, nil
+}
+
+func(self *TestController)CreateTransactionsForEntityFromGBM(entityID int64, prices []float64)(error){
+	startTime := time.Now().Add(-1 * 24* time.Hour)
+	timeIncrement := int64(time.Now().Sub(startTime).Seconds()/float64(len(prices)))
+	entity, err := self.Db.GetEntityByID(entityID)
+	if err != nil{
+		return err
+	}
+
+
+	for index, price := range prices{
+		tempTransaction := model.Transaction{
+			OrderPlaced: int64(index),
+			OrdersFulfilling: []int64{0},
+			NumShares: int64(1),
+			CostPerShare: model.NewMoneyObject(price),
+			TotalCost: model.NewMoneyObject(price),
+			SystemFee: model.NewMoneyObject(0.0),
+			Created: int64((int64(index)+1)*timeIncrement)+startTime.Unix(),
+			Security: entity.Security,
+
+		}
+		_, err = self.Db.InsertTransactionToTable(tempTransaction)
+		if err != nil{
+			return err
+		}
+	}
+	return nil
 }

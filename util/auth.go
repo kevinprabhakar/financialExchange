@@ -3,6 +3,9 @@ package util
 import (
 	"github.com/dgrijalva/jwt-go"
 	"time"
+	"net/http"
+	"strings"
+	"errors"
 )
 
 var TempAuthKey = "rb8vOJsvBfAgK3IkktBt"
@@ -30,9 +33,28 @@ func VerifyAccessToken(tokenString string) (string, error) {
 
 	if err == nil && token.Valid {
 		claims := token.Claims.(jwt.MapClaims)
-
 		return claims["uid"].(string), nil
 	} else {
 		return "", err
 	}
+}
+
+func GetAccessTokenFromHeader(w http.ResponseWriter, r *http.Request)(string, error){
+	var token string
+
+	// Get token from the Authorization header
+	// format: Authorization: Bearer
+	tokens, ok := r.Header["Authorization"]
+	if ok && len(tokens) >= 1 {
+		token = tokens[0]
+		token = strings.TrimPrefix(token, "Bearer ")
+	}
+
+	// If the token is empty...
+	if token == "" {
+		// If we get here, the required token is missing
+		return "", errors.New("NoAccessTokenProvided")
+	}
+
+	return token, nil
 }

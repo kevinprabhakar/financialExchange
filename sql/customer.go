@@ -80,6 +80,7 @@ func ScanCustomer(s RowScanner)(*model.Customer, error){
 	}
 
 	customer := &model.Customer{
+		Id: id,
 		FirstName: firstName.String,
 		LastName: lastName.String,
 		PassHash: passHash.String,

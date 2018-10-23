@@ -15,6 +15,8 @@ func (db *MySqlDB) CreateEntityTable()(error){
 		"security BIGINT NULL," +
 		"created BIGINT NULL," +
 		"deleted BIGINT NULL," +
+		"ipo INT," +
+		"assocUser INT," +
 		"PRIMARY KEY (id) )")
 	if err != nil{
 		return err
@@ -24,10 +26,10 @@ func (db *MySqlDB) CreateEntityTable()(error){
 
 func (db *MySqlDB)InsertEntityIntoTable(entity model.Entity)(int64, error){
 	query := `INSERT INTO entities (
-		name, email, passHash, security, created, deleted
-	) VALUES (?, ?, ?, ?, ?, ?)`
+		name, email, passHash, security, created, deleted, ipo, assocUser
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 
-	r, err := db.Exec(query, entity.Name, entity.Email, entity.PassHash, entity.Security, entity.Created, entity.Deleted)
+	r, err := db.Exec(query, entity.Name, entity.Email, entity.PassHash, entity.Security, entity.Created, entity.Deleted, entity.IPO, entity.AssocUser)
 
 	if err != nil{
 		return 0, err
@@ -65,18 +67,23 @@ func ScanEntity(s RowScanner)(*model.Entity, error){
 		security    int64
 		created int64
 		deleted int64
+		ipo 	int
+		assocUser int64
 	)
-	if err := s.Scan(&id, &name, &email, &passHash, &security, &created, &deleted); err != nil{
+	if err := s.Scan(&id, &name, &email, &passHash, &security, &created, &deleted, &ipo, &assocUser); err != nil{
 		return nil, err
 	}
 
 	entity := &model.Entity{
+		Id: id,
 		Name: name.String,
 		Email: email.String,
 		PassHash: passHash.String,
 		Security: security,
 		Created: created,
 		Deleted: deleted,
+		IPO: ipo,
+		AssocUser: assocUser,
 	}
 
 	return entity, nil
@@ -94,10 +101,46 @@ func (db *MySqlDB)GetEntityByEmail(email string)(*model.Entity, error){
 	return user, nil
 }
 
+func (db *MySqlDB)GetEntityByID(uid int64)(*model.Entity, error){
+	sqlStatement := `SELECT * FROM entities WHERE id = ?`
+
+	row := db.QueryRow(sqlStatement, uid)
+
+	user, err := ScanEntity(row)
+	if err != nil{
+		return nil, err
+	}
+	return user, nil
+}
+
 func (db *MySqlDB)UpdateEntityWithSecurityID(entityID int64, securityID int64)(error){
 	sqlStatement := `UPDATE entities SET security = ? WHERE id = ?`
 
 	_, err := db.Exec(sqlStatement, securityID, entityID)
+
+	if err != nil{
+		return err
+	}
+
+	return nil
+}
+
+func (db *MySqlDB)UpdateEntityWithAssocUser(entityID int64, assocUserID int64)(error){
+	sqlStatement := `UPDATE entities SET assocUser = ? WHERE id = ?`
+
+	_, err := db.Exec(sqlStatement, assocUserID, entityID)
+
+	if err != nil{
+		return err
+	}
+
+	return nil
+}
+
+func (db *MySqlDB)CompleteEntityIPO(entityID int64)(error){
+	sqlStatement := `UPDATE entities SET ipo = ? WHERE id = ?`
+
+	_, err := db.Exec(sqlStatement, 1, entityID)
 
 	if err != nil{
 		return err

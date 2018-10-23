@@ -6,6 +6,8 @@ import (
 	"financialExchange/model"
 	"fmt"
 	"financialExchange/util"
+	"strconv"
+	"errors"
 )
 
 func PlaceOrder(w http.ResponseWriter, r *http.Request){
@@ -46,4 +48,44 @@ func PlaceOrder(w http.ResponseWriter, r *http.Request){
 	}
 
 	fmt.Fprint(w, stringForm)
+}
+
+func IPO(w http.ResponseWriter, r *http.Request){
+	decoder := json.NewDecoder(r.Body)
+	var IPOParams model.IPOParams
+	err := decoder.Decode(&IPOParams)
+
+	if err != nil{
+		ServerLogger.ErrorMsg(err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	accessToken, err := util.GetAccessTokenFromHeader(w, r)
+	if err != nil{
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	uid, err := util.VerifyAccessToken(accessToken)
+	if err != nil{
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	intform, err := strconv.ParseInt(uid, 10, 64)
+	if err != nil{
+		http.Error(w, errors.New("InvalidEntityID").Error(), 400)
+		return
+	}
+
+	_, err = OrderController.IPO(IPOParams, intform)
+	if err != nil{
+		http.Error(w, errors.New("IPO for Entity failed").Error(), 400)
+		return
+	}
+
+	ServerLogger.Debug(fmt.Sprintf("Successful IPO for %s", uid))
+
+	fmt.Fprintf(w, util.GetNoDataSuccessResponse())
 }

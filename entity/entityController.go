@@ -9,6 +9,8 @@ import (
 	"errors"
 	gosql "database/sql"
 
+	"strconv"
+	"fmt"
 )
 
 type EntityController struct{
@@ -72,6 +74,7 @@ func(self *EntityController) CreateEntity(params model.CreateEntityParams)(error
 		Email: params.Email,
 		PassHash: passHash,
 		Security: -1,
+		IPO: 0,
 		Created: creationTime,
 		Deleted: creationTime,
 	}
@@ -87,6 +90,7 @@ func(self *EntityController) CreateEntity(params model.CreateEntityParams)(error
 		newSecurity := model.Security{
 			Entity: entityId,
 			Symbol: params.Symbol,
+			Created: time.Now().Unix(),
 		}
 
 		securityId, insertErr := self.Database.InsertSecurityIntoTable(newSecurity)
@@ -115,6 +119,7 @@ func (self *EntityController) SignIn(SignInParams model.SignInEntityParams)(stri
 	findEntity, findErr := self.Database.GetEntityByEmail(SignInParams.Email)
 
 	if (findErr != nil){
+		fmt.Println(findErr.Error())
 		return "", errors.New("NonexistentEntity")
 	}
 
@@ -125,10 +130,11 @@ func (self *EntityController) SignIn(SignInParams model.SignInEntityParams)(stri
 	}
 
 	//Return access token for usage
-	accessToken, err := util.GetAccessToken(findEntity.Email)
+	accessToken, err := util.GetAccessToken(strconv.FormatInt(findEntity.Id, 10))
 	if err != nil{
 		return "", err
 	}
 
 	return accessToken, nil
 }
+

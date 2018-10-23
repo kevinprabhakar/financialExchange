@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+
+    <base href="/">
+    <link rel="stylesheet" href="./css/prices.css">
+    <script src="js/jquery.min.js"></script>
+    <script src="./js/cookies.js"></script>
+
+
+    <script src="https://rawgit.com/moment/moment/2.2.1/min/moment.min.js"></script>
+
+    <script src="https://npmcdn.com/tether@1.2.4/dist/js/tether.min.js"></script>
+    <script src="https://npmcdn.com/bootstrap@4.0.0-alpha.5/dist/js/bootstrap.min.js"></script>
+    <script src="js/bootstrap.min.js"></script>
+    <script src="js/scripts.js"></script>
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/chartist.js/latest/chartist.min.css">
+    <link rel="stylesheet" href="./css/prices.css">
+    <link rel="stylesheet" href="./css/bootstrap.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.5.0/Chart.js"></script>
+
+    <script src="./js/prices.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="row">
+            <div class="col-3">
+                <h3>Financial Exchange</h3>
+            </div>
+            <div class="col-5"></div>
+            <div class="col-2">
+                <div class="form-group">
+                    <input id="securitySearch" class="form-control" placeholder="Security Search">
+
+                </div>
+            </div>
+            <div class="col-2">
+                <button type="button" class="btn btn-primary" onclick="getAppropriateSecurities(event)">Search for Securities</button>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <canvas id="priceLine"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-3">
+                <div class="row">
+                    <h1>Order Form</h1>
+                </div>
+                <div class="row">
+                    <ul class="nav nav-pills">
+                        <li class="nav-item">
+                            <a class="nav-link tablinks active" onclick="changeAction(event,'Buy')" id="Buy">Buy</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link tablinks" onclick="changeAction(event,'Sell')" id="Sell">Sell</a>
+                        </li>
+                    </ul>
+                </div>
+                <div class="row">
+                    <div class="form-group">
+                        <label for="numShares">Number of Shares</label>
+                        <input type="number" id="numShares" class="form-control" placeholder="0" onchange="updateTotalAmount(event)">
+                    </div>
+                    <div class="form-group">
+                        <label for="amountPerShare">Amount Per Share</label>
+                        <input type="number" id="amountPerShare" class="form-control" placeholder="0" step="0.01" onchange="updateTotalAmount(event)">
+                    </div>
+                </div>
+                <div class="row">
+                    Total:
+                    <div id="totalAmount"></div>
+                </div>
+                <div class="row">
+                    <button type="button" class="btn btn-primary">Place Order</button>
+                </div>
+            </div>
+
+
+
+
+
+
+
+    </div>
+
+</body>
+
+</html>

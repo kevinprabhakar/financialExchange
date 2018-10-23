@@ -10,6 +10,7 @@ import (
 	"financialExchange/order"
 	"financialExchange/model"
 	"financialExchange/transaction"
+	"financialExchange/pricebook"
 	"fmt"
 )
 
@@ -23,6 +24,7 @@ var EntityController *entity.EntityController
 var OrderController *order.OrderController
 var TransactionController *transaction.TransactionController
 var TransactionChannel chan model.OrderTransactionPackage
+var PriceController *pricebook.PriceController
 var ErrorChannel chan error
 
 func init(){
@@ -42,6 +44,7 @@ func init(){
 	EntityController = entity.NewEntityController(DBConn, ServerLogger)
 	OrderController = order.NewOrderController(DBConn, ServerLogger, TransactionChannel)
 	TransactionController = transaction.NewTransactionController(DBConn, ServerLogger, TransactionChannel, ErrorChannel)
+	PriceController = pricebook.NewPriceController(DBConn, ServerLogger)
 
 
 	//Database Table Creation
@@ -82,6 +85,12 @@ func init(){
 	}
 
 	err = DBConn.CreateTransactionTable()
+	if err != nil{
+		ServerLogger.ErrorMsg(err.Error())
+		return
+	}
+
+	err = DBConn.CreateFulfillingOrdersTable()
 	if err != nil{
 		ServerLogger.ErrorMsg(err.Error())
 		return
