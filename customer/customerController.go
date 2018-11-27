@@ -8,6 +8,9 @@ import (
 	"financialExchange/sql"
 	gosql "database/sql"
 	"strconv"
+	"github.com/shopspring/decimal"
+	"financialExchange/transaction"
+	"financialExchange/pricebook"
 )
 
 type CustomerController struct {
@@ -89,6 +92,38 @@ func (self *CustomerController)SignUp(SignUpParams model.CustomerSignUpParams)(e
 	return nil
 }
 
+func (self *CustomerController)GiveUserMoney(accessToken string, params model.CustomerGiveMoneyParams)(error){
+	uid, err := util.VerifyAccessToken(accessToken)
+	if err != nil{
+		return err
+	}
+
+	int64form, err := strconv.ParseInt(uid, 10, 64)
+	if err != nil{
+		return errors.New("InvalidUID")
+	}
+
+	currUserPortfolio, err := self.Database.GetPortfolioByCustomerID(int64form)
+	if err != nil{
+		return err
+	}
+
+	newMoney := currUserPortfolio.CashValue.Add(decimal.NewFromFloat(params.MoneyIncrease))
+	floatForm, _ := newMoney.Float64()
+
+	sqlStatement := `UPDATE portfolios SET cashValue = ? WHERE id=?;`
+
+	_, err = self.Database.Exec(sqlStatement, floatForm, int64form)
+
+	if err != nil{
+		return err
+	}
+
+	return nil
+
+
+}
+
 func (self *CustomerController)SignIn(SignInParams model.CustomerSignInParams)(string, error){
 	if (!util.IsValidEmail(SignInParams.Email)){
 		return "", errors.New("MissingEmailField")
@@ -133,6 +168,13 @@ func (self *CustomerController) GetCurrUserPortfolio(accessToken string)(*model.
 	int64form, err := strconv.ParseInt(uid, 10, 64)
 	if err != nil{
 		return nil, errors.New("InvalidUID")
+	}
+
+	TempTransactionController := transaction.NewTransactionController(self.Database, self.Logger, nil, nil)
+
+	err = TempTransactionController.UpdatePortfolioStockValueByCurrOwnedShares(int64form)
+	if err != nil{
+		return nil, errors.New("UnableToUpdatePortfolioValue")
 	}
 
 	portfolio, err := self.Database.GetPortfolioByCustomerID(int64form)
@@ -242,6 +284,41 @@ func (self *CustomerController)GetOrdersForUser(accessToken string)(*[]model.Ord
 		userOrders = append(userOrders, matchOrder)
 	}
 	return &userOrders, nil
+}
+
+func (self *CustomerController)GetOwnedSharesReport(customerID int64)([]model.OwnedShareReport, error){
+	ownedShares, err := self.Database.GetAllOwnedSharesForUserID(customerID)
+	if err != nil{
+		return []model.OwnedShareReport{}, err
+	}
+	ownedSharesReport := make([]model.OwnedShareReport, 0)
+	TempPriceController := pricebook.NewPriceController(self.Database, self.Logger)
+
+	for _, ownedShare := range ownedShares{
+		security, err := self.Database.GetSecurityByID(ownedShare.Security)
+		if err != nil{
+			return []model.OwnedShareReport{}, err
+		}
+		entity, err := self.Database.GetEntityByID(security.Entity)
+		if err != nil{
+			return []model.OwnedShareReport{}, err
+		}
+		currPrice, err := TempPriceController.GetCurrPriceOfSecurity(security.Id)
+		if err != nil{
+			return []model.OwnedShareReport{}, err
+		}
+
+		ownedShareReport := model.OwnedShareReport{
+			UserID: customerID,
+			Security: security.Id,
+			Symbol: security.Symbol,
+			CurrPrice: currPrice.PricePoint,
+			EntityName: entity.Name,
+			NumShares: ownedShare.NumShares,
+		}
+		ownedSharesReport = append(ownedSharesReport, ownedShareReport)
+	}
+	return ownedSharesReport, nil
 }
 //func (self *CustomerController)GetUsers(params string)(*[]Customer, error){
 //	dec := json.NewDecoder(strings.NewReader(params))

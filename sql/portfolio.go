@@ -74,3 +74,21 @@ func (db *MySqlDB)GetPortfolioByCustomerID(customerID int64)(*model.Portfolio, e
 	}
 	return user, nil
 }
+
+func (db *MySqlDB)UpdatePortfolioForCustomerID(customerID int64, newPortfolio model.Portfolio)(int64, error){
+	sqlStatement := `UPDATE portfolios SET value = ?, stockValue = ?, cashValue = ?, withdrawableFunds = ? WHERE customer = ?`
+
+	r, err := db.Exec(sqlStatement, newPortfolio.Value, newPortfolio.StockValue, newPortfolio.CashValue, newPortfolio.WithdrawableFunds, customerID)
+	if err != nil{
+		return 0, err
+	}
+
+	lastInsertId, err := r.LastInsertId()
+	if err != nil{
+		return 0, err
+	}
+
+	return lastInsertId, nil
+
+
+}

@@ -105,7 +105,6 @@ func GetUser(w http.ResponseWriter, r *http.Request){
 
 	CustomerController.Logger.Debug(fmt.Sprintf("Retrieved customer profile for %s", customer.Email))
 
-
 	byteForm, err := json.Marshal(customer)
 	if err != nil{
 		http.Error(w, errors.New("Error Marshalling JSON").Error(), 400)
@@ -113,6 +112,35 @@ func GetUser(w http.ResponseWriter, r *http.Request){
 	}
 
 	fmt.Fprintf(w, string(byteForm))
+}
+
+func GiveUserMoney(w http.ResponseWriter, r *http.Request){
+	accessToken, err := util.GetAccessTokenFromHeader(w, r)
+	if err != nil{
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	var params model.CustomerGiveMoneyParams
+	err = decoder.Decode(&params)
+	if err != nil{
+		http.Error(w, "Incorrect Parameters", 400)
+		return
+	}
+
+	err = CustomerController.GiveUserMoney(accessToken, params)
+	if err != nil{
+		http.Error(w, "Could not give user money", 500)
+		return
+	}
+
+	fmt.Fprintf(w, util.GetNoDataSuccessResponse())
+
+
+
+
+
 }
 
 func GetCurrUserPortfolio(w http.ResponseWriter, r *http.Request){
@@ -139,6 +167,34 @@ func GetCurrUserPortfolio(w http.ResponseWriter, r *http.Request){
 	}
 
 	fmt.Fprintf(w, string(byteForm))
+}
+
+func GetNewPortfolioValue(w http.ResponseWriter, r *http.Request){
+	accessToken, err := util.GetAccessTokenFromHeader(w, r)
+	if err != nil{
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	uid, err := util.VerifyAccessToken(accessToken)
+	if err != nil{
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	uidIntForm, err := strconv.ParseInt(uid, 10, 64)
+	if err != nil{
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	err = TransactionController.UpdatePortfolioStockValueByCurrOwnedShares(uidIntForm)
+	if err != nil{
+		http.Error(w, "Could not update portfolio value by curr owned shares", 500)
+		return
+	}
+
+	fmt.Fprintf(w, util.GetNoDataSuccessResponse())
 }
 
 func GetUserOrders(w http.ResponseWriter, r *http.Request){
@@ -220,7 +276,7 @@ func GetCurrUserOwnedShares(w http.ResponseWriter, r *http.Request){
 		return
 	}
 
-	ownedShares, err := CustomerController.Database.GetAllOwnedSharesForUserID(int64Version)
+	ownedShares, err := CustomerController.GetOwnedSharesReport(int64Version)
 	if err != nil{
 		http.Error(w, errors.New("Couldn't grab user owned shares").Error(), 400)
 		return

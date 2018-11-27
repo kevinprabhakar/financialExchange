@@ -24,12 +24,14 @@ func main() {
 	r.HandleFunc("/api/customer/login", handlers.SignInCustomer).Methods("POST")
 
 	r.Handle("/api/order", handlers.AuthenticateUser(handlers.PlaceOrder)).Methods("POST")
-	r.Handle("/api/security", handlers.AuthenticateUser(handlers.GetSecurity)).Methods("GET")
+	r.Handle("/api/security/{symbol}", handlers.AuthenticateUser(handlers.GetSecurity)).Methods("GET")
 
 	//todo: Fill out the rest of these CRUD functions
 	//orders
 	r.Handle("/api/customer/orders", handlers.AuthenticateUser(handlers.GetUserOrders)).Methods("GET")
 	r.Handle("/api/customer/orders/{orderID}", handlers.AuthenticateUser(handlers.GetUserOrders)).Methods("GET")
+	r.Handle("/api/customer/giveMoney", handlers.AuthenticateUser(handlers.GiveUserMoney)).Methods("POST")
+
 
 	//customer
 	r.Handle("/api/customer", handlers.AuthenticateUser(handlers.GetUser)).Methods("GET")
@@ -44,9 +46,14 @@ func main() {
 	//entity
 	r.Handle("/api/entity", handlers.AuthenticateUser(handlers.GetCurrEntity)).Methods("GET")
 
+	//search autocompletion
+	r.Handle("/api/search", handlers.AuthenticateUser(handlers.SearchPrefixes)).Methods("POST")
+
+
 	//prices
 	//in the future authenticate for prices, but for testing purposes, we will keep it unauthenticated
 	r.Handle("/api/prices", handlers.NoAuthUser(handlers.GetPrices)).Methods("POST")
+	r.Handle("/api/currprice/{symbol}", handlers.NoAuthUser(handlers.GetCurrPrice)).Methods("GET")
 
 
 	r.PathPrefix("/").Handler(http.FileServer(http.Dir("./web/src")))

@@ -85,6 +85,18 @@ func (db *MySqlDB)GetSecurityByID(uid int64)(*model.Security, error){
 	return security, nil
 }
 
+func (db *MySqlDB)GetSecurityBySymbol(symbol string)(*model.Security, error){
+	sqlStatement := `SELECT * FROM securities WHERE symbol = ?`
+
+	row := db.QueryRow(sqlStatement, symbol)
+
+	security, err := ScanSecurity(row)
+	if err != nil{
+		return nil, err
+	}
+	return security, nil
+}
+
 func (db *MySqlDB)GetSecurityByEntityID(uid int64)(*model.Security, error){
 	sqlStatement := `SELECT * FROM securities WHERE entity = ?`
 
@@ -95,4 +107,25 @@ func (db *MySqlDB)GetSecurityByEntityID(uid int64)(*model.Security, error){
 		return nil, err
 	}
 	return security, nil
+}
+
+func (db *MySqlDB)GetSecuritiesWithPrefix(prefix string)([]model.Security, error){
+	sqlStatement := `SELECT * FROM securities WHERE symbol LIKE CONCAT(?, '%')`
+
+	rows, err := db.Query(sqlStatement, prefix)
+	if err != nil{
+		return []model.Security{}, err
+	}
+	defer rows.Close()
+
+	securities := make([]model.Security, 0)
+
+	for rows.Next(){
+		security, err := ScanSecurity(rows)
+		if err != nil{
+			return []model.Security{}, err
+		}
+		securities = append(securities, *security)
+	}
+	return securities, nil
 }

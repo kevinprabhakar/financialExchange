@@ -42,3 +42,13 @@ func NewMoneyObject(amount float64) (Money){
 func NewMoneyObjectFromDecimal(amount decimal.Decimal)(Money){
 	return Money{amount}
 }
+
+type SearchParams struct{
+	Prefix 		string 		`json:"prefix"`
+}
+
+type SearchResult struct{
+	EntityName 	string 		`json:"entityName"`
+	Symbol		string 		`json:"symbol"`
+	SecurityID  int64 		`json:"securityID"`
+}

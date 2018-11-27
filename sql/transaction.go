@@ -48,6 +48,57 @@ func (db *MySqlDB) InsertTransactionToTable(transaction model.Transaction)(int64
 	return lastInsertId, nil
 }
 
+func (db *MySqlDB) GetTransactionByID(transactionID int64)(model.Transaction, error){
+	query := `SELECT * FROM transactions WHERE id = ?`
+
+	rows, err := db.Query(query, transactionID)
+
+
+	if err != nil{
+		return model.Transaction{}, err
+	}
+
+	defer rows.Close()
+
+	for rows.Next(){
+		var (
+			Id				int64
+			OrderPlaced 		gosql.NullInt64
+			NumShares 			gosql.NullInt64
+			CostPerShare		gosql.NullFloat64
+			SystemFee			gosql.NullFloat64
+			TotalCost 			gosql.NullFloat64
+			Security 			gosql.NullInt64
+			Created 			gosql.NullInt64
+
+
+		)
+
+		err := rows.Scan(&Id , &OrderPlaced, &NumShares, &CostPerShare, &SystemFee, &TotalCost, &Security, &Created)
+
+		if err != nil{
+			return model.Transaction{}, err
+		}
+
+		newTransaction := model.Transaction{
+			Id: Id,
+			OrderPlaced: OrderPlaced.Int64,
+			NumShares: NumShares.Int64,
+			CostPerShare: model.NewMoneyObject(CostPerShare.Float64),
+			SystemFee: model.NewMoneyObject(SystemFee.Float64),
+			TotalCost: model.NewMoneyObject(TotalCost.Float64),
+			Security: Security.Int64,
+			Created: Created.Int64,
+		}
+
+		return newTransaction, nil
+
+	}
+
+	return model.Transaction{}, nil
+
+}
+
 func (db *MySqlDB) GetAllTransactionsForTimePeriodForSecurity(start int64, end int64, security int64)([]model.Transaction, error){
 	query := `SELECT * FROM transactions WHERE created < ? AND created >= ? AND security = ?`
 

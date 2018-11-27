@@ -113,8 +113,19 @@ func (self *OrderController) CreateOrder(params model.OrderCreateParams)(int64, 
 func (self *OrderController)GetMatchingOrders(order model.Order)([]model.Order, error){
 	matchingOrders := make([]model.Order,0)
 
-	sqlStatement := `SELECT * FROM orders WHERE symbol = ? AND investorAction = ? AND numSharesRemaining >= ? AND (status = ? OR status = ?) ORDER BY created`
-	rows, err := self.Database.Query(sqlStatement, order.Symbol, util.IntAbsVal(int(order.InvestorAction)-1), 0, model.InProgress, model.Untouched)
+	sqlStatement := ""
+	amountOfOrder, _ := order.CostPerShare.Float64()
+
+	//If main order is a buy order, look for sell orders with price less than or equal to buy order price
+	if order.InvestorAction == 0{
+		sqlStatement = `SELECT * FROM orders WHERE symbol = ? AND investorAction = ? AND numSharesRemaining >= ? AND costPerShare <= ? AND (status = ? OR status = ?) ORDER BY created`
+	//If main order is a sell order, look for buy orders with price greater than or equal to sell order price
+	}else{
+		sqlStatement = `SELECT * FROM orders WHERE symbol = ? AND investorAction = ? AND numSharesRemaining >= ? AND costPerShare >= ? AND (status = ? OR status = ?) ORDER BY created`
+
+	}
+
+	rows, err := self.Database.Query(sqlStatement, order.Symbol, util.IntAbsVal(int(order.InvestorAction)-1), 0, amountOfOrder, model.InProgress, model.Untouched)
 
 	if err != nil{
 		return matchingOrders, err
@@ -303,16 +314,16 @@ func (self *OrderController) ValidateOrderFields(params model.OrderCreateParams)
 		}
 
 		costOfShares := float64(params.NumShares) * params.CostPerShare
-		totalAmount, exactTotal := model.NewMoneyObject(costOfShares).Float64()
-		portfolioCashValue, exactCash := portfolio.CashValue.Float64()
+		totalAmount, _ := model.NewMoneyObject(costOfShares).Float64()
+		portfolioCashValue, _ := portfolio.CashValue.Float64()
 
-		if !exactTotal{
-			return errors.New("CostOfSharesUnExact")
-		}
-
-		if !exactCash{
-			return errors.New("PortfolioValueUnExact")
-		}
+		//if !exactTotal{
+		//	return errors.New("CostOfSharesUnExact")
+		//}
+		//
+		//if !exactCash{
+		//	return errors.New("PortfolioValueUnExact")
+		//}
 
 		if totalAmount > portfolioCashValue {
 			return errors.New("InsufficientFunds")
@@ -346,9 +357,15 @@ func (self *OrderController)CreateAssocUserForEntity(entity model.Entity, params
 		}
 	}
 
+	security, err := self.Database.GetSecurityByID(entity.Security)
+	if err != nil{
+		return 0, err
+	}
+
 	//First insert user
 	newUser := model.Customer{
-		FirstName	: entity.Name,
+		FirstName	: security.Symbol,
+		LastName	: "Broker",
 		PassHash	: entity.PassHash,
 		Email 		: html.EscapeString(entity.Email),
 		Portfolio	: 0,
@@ -456,7 +473,19 @@ func (self *OrderController)IPO(params model.IPOParams, entityID int64)(int64, e
 		return 0, err
 	}
 
-	err = self.Database.CompleteEntityIPO(entityID)
+	IPOTransaction := model.Transaction{
+		OrderPlaced: orderID,
+		NumShares: int64(params.NumShares),
+		CostPerShare: IPOOrder.CostPerShare,
+		TotalCost: model.NewMoneyObject(params.SharePrice*float64(params.NumShares)),
+		SystemFee: model.NewMoneyObject(0.0),
+		Created: time.Now().Unix(),
+		Security: entity.Security,
+	}
+
+	ipoTransactionID, err := self.Database.InsertTransactionToTable(IPOTransaction)
+
+	err = self.Database.CompleteEntityIPO(ipoTransactionID, entityID)
 	if err != nil{
 		return 0, err
 	}

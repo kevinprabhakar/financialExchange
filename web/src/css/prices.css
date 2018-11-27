@@ -1,3 +1,11 @@
+body{
+    height: 100%;
+    background-repeat: no-repeat;
+    background:url(https://i.ytimg.com/vi/4kfXjatgeEU/maxresdefault.jpg);
+    font-family: 'Oxygen', sans-serif;
+    background-size: cover;
+};
+
 .tab {
     overflow: hidden;
     background-color: #f1f1f1;
@@ -18,3 +26,10 @@
     background-color: #ccc;
 }
 
+#currUserOrders {
+    max-height: 260px;
+}
+
+#currPrice {
+    float:right;
+}

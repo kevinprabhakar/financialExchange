@@ -32,7 +32,10 @@
             <div class="col-5"></div>
             <div class="col-2">
                 <div class="form-group">
-                    <input id="securitySearch" class="form-control" placeholder="Security Search">
+                    <input id="securitySearch" list="securitiesList" class="form-control" placeholder="Security Search">
+                    <datalist id="securitiesList">
+
+                    </datalist>
 
                 </div>
             </div>
@@ -44,13 +47,39 @@
             <div class="col-12">
                 <div class="card">
                     <div class="card-body">
+                        <div id="currPrice">Current Price: </div>
+
                         <canvas id="priceLine"></canvas>
+                        <ul class="nav nav-pills">
+                            <li class="nav-item">
+                                <a class="nav-link tablinks2 active" onclick="changePriceLineWindow(event,0,'1D')" id="1D">1D</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link tablinks2" onclick="changePriceLineWindow(event,1,'1W')" id="1W">1W</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link tablinks2" onclick="changePriceLineWindow(event,2,'1M')" id="1M">1M</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link tablinks2" onclick="changePriceLineWindow(event,3,'3M')" id="3M">3M</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link tablinks2" onclick="changePriceLineWindow(event,4,'1Y')" id="1Y">1Y</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link tablinks2" onclick="changePriceLineWindow(event,5,'All')" id="All">All</a>
+                            </li>
+                            <!--<li class="nav-item">-->
+                                <!--<a class="nav-link tablinks2" onclick="changePriceLineWindow(event,5,'AllPrices')" id="AllPrices">All</a>-->
+                            <!--</li>-->
+
+                        </ul>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="row">
-            <div class="col-3">
+        <div class="row" id="userInformation">
+            <div class="col-4">
                 <div class="row">
                     <h1>Order Form</h1>
                 </div>
@@ -79,9 +108,40 @@
                     <div id="totalAmount"></div>
                 </div>
                 <div class="row">
-                    <button type="button" class="btn btn-primary">Place Order</button>
+                    <button type="button" class="btn btn-primary" onclick="placeOrder(event)">Place Order</button>
                 </div>
             </div>
+            <div class="col-4">
+                <div class="row">
+                    <h1>Give User Money</h1>
+                </div>
+                <div class="row">
+                    <div class="form-group">
+                        <label for="amountMoneyGiven">Amount Of Money Given</label>
+                        <input type="number" id="amountMoneyGiven" class="form-control" placeholder="0">
+                    </div>
+                </div>
+                <div class="row">
+                    <button type="button" class="btn btn-primary" onclick="giveUserMoney(event)">Give User Money</button>
+                </div>
+                <br>
+                <div class="row">
+                    <h1>User Portfolio</h1>
+                </div>
+                <div class="row" id="currUserPortfolio">
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="row">
+                    <h1>Current Orders</h1>
+                </div>
+                <div class="row">
+                    <div class="pre-scrollable" id="currUserOrders">
+                        No User Orders!
+                    </div>
+                </div>
+            </div>
+
 
 
 

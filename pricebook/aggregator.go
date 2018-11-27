@@ -107,12 +107,88 @@ func (self *PriceController)GetSecurityChartForTimePeriod(timePeriod TimePeriod,
 		if err != nil{
 			return []model.PricePoint{}, err
 		}else{
-			pricePoint := model.PricePoint{
-				TimeStamp: endPeriod,
-				PricePoint: WASP,
+			if WASP == float64(-1){
+				if len(prices) != 0{
+					pricePoint := model.PricePoint{
+						TimeStamp: endPeriod,
+						PricePoint: prices[len(prices)-1].PricePoint,
+					}
+					prices = append(prices, pricePoint)
+				}else{
+					tickBack := int64(1)
+					securityModel, err := self.Database.GetSecurityByID(security)
+					if err != nil{
+						return []model.PricePoint{}, err
+					}
+					entity, err := self.Database.GetEntityByID(securityModel.Entity)
+					if err != nil{
+						return []model.PricePoint{}, err
+					}
+					IPOOrder, err := self.Database.GetTransactionByID(entity.IPO)
+					if err != nil{
+						return []model.PricePoint{}, err
+					}
+
+					for WASP == -1 && startPeriod-(tickBack*timeIncrement) > IPOOrder.Created{
+						WASP, err := self.WeightedAverageSharePrice(startPeriod-(tickBack*timeIncrement),endPeriod-(tickBack*timeIncrement), security)
+						if err != nil{
+							return []model.PricePoint{}, err
+						}
+						tickBack += 1
+						if WASP != -1{
+							pricePoint := model.PricePoint{
+								TimeStamp: endPeriod,
+								PricePoint: WASP,
+							}
+							prices = append(prices, pricePoint)
+						}
+					}
+
+
+				}
+			}else{
+				pricePoint := model.PricePoint{
+					TimeStamp: endPeriod,
+					PricePoint: WASP,
+				}
+				prices = append(prices, pricePoint)
 			}
-			prices = append(prices, pricePoint)
+
 		}
 	}
 	return prices, nil
+}
+
+func(self *PriceController)GetCurrPriceOfSecurity(securityID int64)(model.PricePoint, error){
+	security, err := self.Database.GetSecurityByID(securityID)
+	if err != nil{
+		return model.PricePoint{}, err
+	}
+	WASP := float64(-1)
+	tickBack := int64(0)
+	entity, err := self.Database.GetEntityByID(security.Entity)
+	if err != nil{
+		return model.PricePoint{}, err
+	}
+	IPOOrder, err := self.Database.GetTransactionByID(entity.IPO)
+	if err != nil{
+		return model.PricePoint{}, err
+	}
+	startPeriod := time.Now().Add(time.Minute * -5).Unix()
+	endPeriod := time.Now().Unix()
+
+	for WASP == -1 && endPeriod-(tickBack*300) > IPOOrder.Created{
+		WASP, err := self.WeightedAverageSharePrice(startPeriod-(tickBack*300),endPeriod-(tickBack*300), security.Id)
+		if err != nil{
+			return model.PricePoint{}, err
+		}
+		tickBack += 1
+		if WASP != -1{
+			return model.PricePoint{
+				TimeStamp: time.Now().Unix(),
+				PricePoint: WASP,
+			}, nil
+		}
+	}
+	return model.PricePoint{}, nil
 }

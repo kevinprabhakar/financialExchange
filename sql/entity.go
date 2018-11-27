@@ -15,7 +15,7 @@ func (db *MySqlDB) CreateEntityTable()(error){
 		"security BIGINT NULL," +
 		"created BIGINT NULL," +
 		"deleted BIGINT NULL," +
-		"ipo INT," +
+		"ipo BIGINT NULL," +
 		"assocUser INT," +
 		"PRIMARY KEY (id) )")
 	if err != nil{
@@ -67,7 +67,7 @@ func ScanEntity(s RowScanner)(*model.Entity, error){
 		security    int64
 		created int64
 		deleted int64
-		ipo 	int
+		ipo 	int64
 		assocUser int64
 	)
 	if err := s.Scan(&id, &name, &email, &passHash, &security, &created, &deleted, &ipo, &assocUser); err != nil{
@@ -137,14 +137,35 @@ func (db *MySqlDB)UpdateEntityWithAssocUser(entityID int64, assocUserID int64)(e
 	return nil
 }
 
-func (db *MySqlDB)CompleteEntityIPO(entityID int64)(error){
+func (db *MySqlDB)CompleteEntityIPO(ipoTransactionID, entityID int64)(error){
 	sqlStatement := `UPDATE entities SET ipo = ? WHERE id = ?`
 
-	_, err := db.Exec(sqlStatement, 1, entityID)
+	_, err := db.Exec(sqlStatement, ipoTransactionID, entityID)
 
 	if err != nil{
 		return err
 	}
 
 	return nil
+}
+
+func (db *MySqlDB)GetEntitiesWithPrefix(prefix string)([]model.Entity, error){
+	sqlStatement := `SELECT * FROM entities WHERE name LIKE CONCAT(?, '%')`
+
+	rows, err := db.Query(sqlStatement, prefix)
+	if err != nil{
+		return []model.Entity{}, err
+	}
+	defer rows.Close()
+
+	entities := make([]model.Entity, 0)
+
+	for rows.Next(){
+		entity, err := ScanEntity(rows)
+		if err != nil{
+			return []model.Entity{}, err
+		}
+		entities = append(entities, *entity)
+	}
+	return entities, nil
 }

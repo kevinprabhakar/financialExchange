@@ -909,7 +909,6 @@ func TestBrownianForFrontEnd(t *testing.T){
 		t.Fail()
 		return
 	}
-
 	entityID, _, _, err := TestingController.CreateEntityWithSecurity()
 	if err != nil{
 		TestingController.Logger.ErrorMsg("Error Creating Entity")
@@ -924,28 +923,31 @@ func TestBrownianForFrontEnd(t *testing.T){
 		return
 	}
 
-	order, err := TestingController.Db.GetOrderById(int64(1))
-	if err != nil{
-		TestingController.Logger.ErrorMsg("Error Getting Entity")
-		t.Fail()
-		return
-	}
+	//order, err := TestingController.Db.GetOrderById(int64(1))
+	//if err != nil{
+	//	TestingController.Logger.ErrorMsg("Error Getting Entity")
+	//	t.Fail()
+	//	return
+	//}
+	//
+	//initialPrice, _ := order.CostPerShare.Float64()
+	//
+	//artificialPrices, _, err := TestingController.GeometricBrownianMotion(initialPrice,0.1,0.4,1.0,288)
+	//if err != nil{
+	//	TestingController.Logger.ErrorMsg("Error Generating Brownian Motion")
+	//	t.Fail()
+	//	return
+	//}
+	//
+	//err = TestingController.CreateTransactionsForEntityFromGBM(entityID, artificialPrices)
+	//if err != nil{
+	//	TestingController.Logger.ErrorMsg("Error Generating Brownian Motion Transactions")
+	//	t.Fail()
+	//	return
+	//}
 
-	initialPrice, _ := order.CostPerShare.Float64()
 
-	artificialPrices, _, err := TestingController.GeometricBrownianMotion(initialPrice,0.1,0.4,1.0,288)
-	if err != nil{
-		TestingController.Logger.ErrorMsg("Error Generating Brownian Motion")
-		t.Fail()
-		return
-	}
 
-	err = TestingController.CreateTransactionsForEntityFromGBM(entityID, artificialPrices)
-	if err != nil{
-		TestingController.Logger.ErrorMsg("Error Generating Brownian Motion Transactions")
-		t.Fail()
-		return
-	}
 
 
 }

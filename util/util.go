@@ -31,6 +31,20 @@ func CheckPasswordHash(password, hash string) bool {
 	return err == nil
 }
 
+func Max(price1 float64, price2 float64)(float64){
+	if price1 >= price2{
+		return price1
+	}
+	return price2
+}
+
+func Min(price1 float64, price2 float64)(float64){
+	if price1 >= price2{
+		return price2
+	}
+	return price1
+}
+
 func GetNoDataSuccessResponse() string {
 	return "{\"success\":1}"
 }

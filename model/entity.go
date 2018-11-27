@@ -10,8 +10,8 @@ type Entity struct{
 	Deleted 	int64 				`json:"deleted"`
 
 	//Indicates whether or not entity has IPO'd
-	//0 = no, 1 = yes
-	IPO 		int				`json:"ipo"`
+	//0 = no, 1+ = Transaction ID of IPO
+	IPO 		int64				`json:"ipo"`
 	AssocUser	int64 			`json:"assocUser"`
 }
 
