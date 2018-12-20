@@ -6,8 +6,10 @@
 
     <base href="/">
     <link rel="stylesheet" href="./css/prices.css">
+
     <script src="js/jquery.min.js"></script>
     <script src="./js/cookies.js"></script>
+
 
 
     <script src="https://rawgit.com/moment/moment/2.2.1/min/moment.min.js"></script>
@@ -24,123 +26,142 @@
     <script src="./js/prices.js"></script>
 </head>
 <body>
-    <div class="container">
-        <div class="row">
-            <div class="col-3">
-                <h3>Financial Exchange</h3>
-            </div>
-            <div class="col-5"></div>
-            <div class="col-2">
-                <div class="form-group">
+<div class="container">
+    <div class="row justify-content-between">
+
+        <div class="col-4">
+            <h2>Financial Exchange</h2>
+        </div>
+        <div class="col-4" id="secSearchCol">
+            <div class="form-inline float-right">
+                <div class="form-group" id="searchForm">
                     <input id="securitySearch" list="securitiesList" class="form-control" placeholder="Security Search">
                     <datalist id="securitiesList">
 
                     </datalist>
+                    <button type="button" class="btn btn-primary" id="secSearchButton" onclick="getAppropriateSecurities(event)">Search </button>
 
                 </div>
             </div>
-            <div class="col-2">
-                <button type="button" class="btn btn-primary" onclick="getAppropriateSecurities(event)">Search for Securities</button>
-            </div>
         </div>
-        <div class="row">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-body">
-                        <div id="currPrice">Current Price: </div>
+    </div>
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row justify-content-between">
+                        <div class="col-4">
+                            <h3 id="currSecName" class="float-left"></h3>
+                        </div>
+                        <div class="col-4">
+                            <h3 id="currPrice" class="float-right">Current Price: </h3>
+                        </div>
 
-                        <canvas id="priceLine"></canvas>
-                        <ul class="nav nav-pills">
-                            <li class="nav-item">
-                                <a class="nav-link tablinks2 active" onclick="changePriceLineWindow(event,0,'1D')" id="1D">1D</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link tablinks2" onclick="changePriceLineWindow(event,1,'1W')" id="1W">1W</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link tablinks2" onclick="changePriceLineWindow(event,2,'1M')" id="1M">1M</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link tablinks2" onclick="changePriceLineWindow(event,3,'3M')" id="3M">3M</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link tablinks2" onclick="changePriceLineWindow(event,4,'1Y')" id="1Y">1Y</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link tablinks2" onclick="changePriceLineWindow(event,5,'All')" id="All">All</a>
-                            </li>
-                            <!--<li class="nav-item">-->
-                                <!--<a class="nav-link tablinks2" onclick="changePriceLineWindow(event,5,'AllPrices')" id="AllPrices">All</a>-->
-                            <!--</li>-->
-
-                        </ul>
                     </div>
-                </div>
-            </div>
-        </div>
-        <div class="row" id="userInformation">
-            <div class="col-4">
-                <div class="row">
-                    <h1>Order Form</h1>
-                </div>
-                <div class="row">
+
+                    <canvas id="priceLine"></canvas>
                     <ul class="nav nav-pills">
                         <li class="nav-item">
-                            <a class="nav-link tablinks active" onclick="changeAction(event,'Buy')" id="Buy">Buy</a>
+                            <a class="nav-link tablinks2 active" onclick="changePriceLineWindow(event,0,'1D')" id="1D">1D</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link tablinks" onclick="changeAction(event,'Sell')" id="Sell">Sell</a>
+                            <a class="nav-link tablinks2" onclick="changePriceLineWindow(event,1,'1W')" id="1W">1W</a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link tablinks2" onclick="changePriceLineWindow(event,2,'1M')" id="1M">1M</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link tablinks2" onclick="changePriceLineWindow(event,3,'3M')" id="3M">3M</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link tablinks2" onclick="changePriceLineWindow(event,4,'1Y')" id="1Y">1Y</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link tablinks2" onclick="changePriceLineWindow(event,5,'All')" id="All">All</a>
+                        </li>
+                        <!--<li class="nav-item">-->
+                        <!--<a class="nav-link tablinks2" onclick="changePriceLineWindow(event,5,'AllPrices')" id="AllPrices">All</a>-->
+                        <!--</li>-->
+
                     </ul>
                 </div>
-                <div class="row">
-                    <div class="form-group">
-                        <label for="numShares">Number of Shares</label>
-                        <input type="number" id="numShares" class="form-control" placeholder="0" onchange="updateTotalAmount(event)">
-                    </div>
-                    <div class="form-group">
-                        <label for="amountPerShare">Amount Per Share</label>
-                        <input type="number" id="amountPerShare" class="form-control" placeholder="0" step="0.01" onchange="updateTotalAmount(event)">
-                    </div>
-                </div>
-                <div class="row">
-                    Total:
-                    <div id="totalAmount"></div>
-                </div>
-                <div class="row">
-                    <button type="button" class="btn btn-primary" onclick="placeOrder(event)">Place Order</button>
-                </div>
             </div>
-            <div class="col-4">
-                <div class="row">
-                    <h1>Give User Money</h1>
-                </div>
-                <div class="row">
-                    <div class="form-group">
-                        <label for="amountMoneyGiven">Amount Of Money Given</label>
-                        <input type="number" id="amountMoneyGiven" class="form-control" placeholder="0">
-                    </div>
-                </div>
-                <div class="row">
-                    <button type="button" class="btn btn-primary" onclick="giveUserMoney(event)">Give User Money</button>
-                </div>
-                <br>
-                <div class="row">
-                    <h1>User Portfolio</h1>
-                </div>
-                <div class="row" id="currUserPortfolio">
-                </div>
-            </div>
-            <div class="col-4">
-                <div class="row">
-                    <h1>Current Orders</h1>
-                </div>
-                <div class="row">
-                    <div class="pre-scrollable" id="currUserOrders">
-                        No User Orders!
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-12">
+            <marquee id="mostTraded" onmouseover="this.stop();" onmouseout="this.start();"></marquee>
+        </div>
+    </div>
+    <div class="card-deck" id="userInformation">
+            <div class="card userInfoCard" id="orderPlaceCard">
+                <div class="card-body">
+
+                    <h2 class="card-title text-center">Order Form</h2>
+                    <div class="card-text">
+                        <ul class="nav nav-pills">
+                            <li class="nav-item">
+                                <a class="nav-link tablinks active" onclick="changeAction(event,'Buy')" id="Buy">Buy</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link tablinks" onclick="changeAction(event,'Sell')" id="Sell">Sell</a>
+                            </li>
+                        </ul>
+                        <div class="form-inline">
+                            <div class="form-group" id="numSharesDecider">
+                                <label for="numShares" id="numSharesLabel">Number of Shares </label>
+                                <input type="number" id="numShares" class="form-control" placeholder="0" onchange="updateTotalAmount(event)">
+                            </div>
+                        </div>
+                        <div class="form-inline">
+                            <div class="form-group" id="amtShareDecider">
+                                <label for="amountPerShare" id="amtShareLabel">Amount Per Share </label>
+                                <input type="number" id="amountPerShare" class="form-control" placeholder="0" step="0.01" onchange="updateTotalAmount(event)">
+                            </div>
+                        </div>
+                        <div class="form-inline">
+
+                            Total Money:
+                            <div id="totalAmount"></div>
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="placeOrder(event)">Place Order</button>
                     </div>
                 </div>
             </div>
+            <div class="card userInfoCard">
+                <div class="card-body">
+
+                <h2 class="card-title text-center">User Portfolio</h2>
+                <div class="card-text">
+                    <div id="currUserPortfolio">
+
+                    </div>
+                </div>
+                </div>
+            </div>
+            <div class="card userInfoCard">
+                <div class="card-body">
+                    <h2 class="card-title text-center">Current Orders</h2>
+                    <div class="card-text pre-scrollable">
+                        <div class="pre-scrollable" id="currUserOrders">
+                            No User Orders!
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card userInfoCard">
+                <div class="card-body">
+
+                    <h2 class="card-title text-center">Load Money</h2>
+                    <div class="card-text">
+                        <div class="form-group">
+                            <label for="amountMoneyGiven">Amount Of Money Given</label>
+                            <input type="number" id="amountMoneyGiven" class="form-control" placeholder="0">
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="giveUserMoney(event)">Give User Money</button>
+                    </div>
+                </div>
+            </div>
 
 
 
@@ -149,6 +170,7 @@
 
 
 
+        </div>
     </div>
 
 </body>

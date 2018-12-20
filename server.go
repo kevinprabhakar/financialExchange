@@ -25,6 +25,7 @@ func main() {
 
 	r.Handle("/api/order", handlers.AuthenticateUser(handlers.PlaceOrder)).Methods("POST")
 	r.Handle("/api/security/{symbol}", handlers.AuthenticateUser(handlers.GetSecurity)).Methods("GET")
+	r.Handle("/api/securities/mostdailytraded", handlers.AuthenticateUser(handlers.GetMostDailyTraded)).Methods("GET")
 
 	//todo: Fill out the rest of these CRUD functions
 	//orders
@@ -45,6 +46,7 @@ func main() {
 
 	//entity
 	r.Handle("/api/entity", handlers.AuthenticateUser(handlers.GetCurrEntity)).Methods("GET")
+	r.Handle("/api/entity/{symbol}", handlers.AuthenticateUser(handlers.GetEntityBySymbol)).Methods("GET")
 
 	//search autocompletion
 	r.Handle("/api/search", handlers.AuthenticateUser(handlers.SearchPrefixes)).Methods("POST")

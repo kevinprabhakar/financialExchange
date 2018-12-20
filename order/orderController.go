@@ -416,6 +416,43 @@ func (self *OrderController)CreateAssocUserForEntity(entity model.Entity, params
 	return userId, nil
 }
 
+func (self *OrderController)GetMostOrderedSecuritiesOverTimeframe(startTime time.Time, numSecurities int)([]model.MostTradedReport, error){
+	unixTime := startTime.Unix()
+
+	sqlQuery := "SELECT `security`, COUNT(`security`) AS `value_occurrence` FROM `orders` WHERE created > ? GROUP BY `security` ORDER BY `value_occurrence` DESC LIMIT ?;"
+
+	results, err := self.Database.Query(sqlQuery, unixTime, numSecurities)
+	if err != nil{
+		return []model.MostTradedReport{}, err
+	}
+
+	securities := make([]model.MostTradedReport, 0)
+
+	for results.Next(){
+		var securityId int64
+		var frequency int64
+
+		err := results.Scan(&securityId, &frequency)
+		if err != nil{
+			return []model.MostTradedReport{}, err
+		}
+
+		security, err := self.Database.GetSecurityByID(securityId)
+		if err != nil{
+			return []model.MostTradedReport{}, err
+		}
+
+		newMostTradedReport := model.MostTradedReport{
+			Security: *security,
+			Frequency: frequency,
+		}
+
+		securities = append(securities, newMostTradedReport)
+	}
+
+	return securities, nil
+}
+
 
 func (self *OrderController)IPO(params model.IPOParams, entityID int64)(int64, error){
 	entity, err := self.Database.GetEntityByID(entityID)

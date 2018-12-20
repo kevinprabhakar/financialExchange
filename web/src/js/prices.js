@@ -5,12 +5,18 @@ var currTimePeriod = 0
 var currentPrice = 0.0
 var currChart = null
 var currSymbol = null
+var currEntityName = ""
+
+var BearerString = 'Bearer ' + api.readCookie("accessToken")
+
 
 
 $(document).ready(function(){
-      var BearerString = 'Bearer ' + api.readCookie("accessToken")
       GetSymbolOfCurrSecurity()
+      GetEntityOfCurrSecurity()
       GenerateNewPriceLine()
+      GetDailyMostTraded()
+      GetCurrPrice()
       $.ajax({
         url: "/api/customer",
         headers: {
@@ -56,21 +62,7 @@ $(document).ready(function(){
             });
 
         });
-      $.ajax({
-              url: "/api/currprice/"+currSecurity.toString(),
-              type: "GET",
-              contentType: "application/json",
-              success: function(response, textStatus, jQxhr){
-                     parsedJSON = JSON.parse(response)
-                     currentPrice = parsedJSON.pricePoint
-                     var currPrice = document.getElementById("currPrice")
-                     currPrice.textContent = "Current Price: $" + currentPrice.toString()
 
-              },
-              error: function( jqXhr, textStatus, errorThrown ){
-                      console.log( errorThrown );
-              }
-            })
       $.ajax({
               url: "/api/customer/portfolio",
               headers: {
@@ -80,7 +72,8 @@ $(document).ready(function(){
               contentType: "application/json",
               success: function(response, textStatus, jQxhr){
                      currUserPortfolio = JSON.parse(response)
-                     newHTMLString = "<table><tr><td>Cash Value: $</td><td>" + currUserPortfolio["cashValue"] + "</td></tr><tr><td><a href='ownedShares.html'>Stock Value</a>: $</td><td>"+currUserPortfolio["stockValue"]+"</td></tr></table>"
+                     newHTMLString = "<div class='row'><div class='col center-block text-center' id='cashValCol'><h4>$"+money_round(currUserPortfolio["cashValue"])+"</h4><br>Cash</div> <div class='col center-block text-center' id='stockValCol'><h4>$"+money_round(currUserPortfolio["stockValue"])+"</h4><br><a href='ownedShares.html'>Stock</a></div> </div>"
+//                     newHTMLString = "<table><tr><td>Cash Value: $</td><td>" + currUserPortfolio["cashValue"] + "</td></tr><tr><td><a href='ownedShares.html'>Stock Value</a>: $</td><td>"+currUserPortfolio["stockValue"]+"</td></tr></table>"
 
 
                      var userPortfolio = document.getElementById("currUserPortfolio")
@@ -137,7 +130,25 @@ $(document).ready(function(){
 
 });
 
+function GetCurrPrice(){
+    var BearerString = 'Bearer ' + api.readCookie("accessToken")
 
+    $.ajax({
+      url: "/api/currprice/"+currSecurity.toString(),
+      type: "GET",
+      contentType: "application/json",
+      success: function(response, textStatus, jQxhr){
+             parsedJSON = JSON.parse(response)
+             currentPrice = parsedJSON.pricePoint
+             var currPrice = document.getElementById("currPrice")
+             currPrice.textContent = "Current Price: $" + money_round(currentPrice).toString()
+
+      },
+      error: function( jqXhr, textStatus, errorThrown ){
+              console.log( errorThrown );
+      }
+    })
+}
 
 function GenerateNewPriceLine(){
     var BearerString = 'Bearer ' + api.readCookie("accessToken")
@@ -163,6 +174,10 @@ function GenerateNewPriceLine(){
                   data: pricePoints,
                 }]
               };
+
+              if (currChart) {
+                currChart.destroy();
+              }
 
               // Create a new line chart object where as first parameter we pass in a selector
               // that is resolving to our chart container element. The Second parameter
@@ -202,7 +217,7 @@ function updateTotalAmount(evt) {
         console.log(numShares*amountPerShare);
         var totalAmount = document.getElementById("totalAmount");
         console.log(toString(numShares*amountPerShare));
-        totalAmount.textContent = "  $"+ numShares*amountPerShare;
+        totalAmount.textContent = "  $"+ money_round(numShares*amountPerShare);
     }
 }
 
@@ -221,6 +236,36 @@ function changeAction(evt, action) {
     }
 
     console.log(currAction);
+}
+
+function loadSecurityFromMarquee(event, symbol){
+    var BearerString = 'Bearer ' + api.readCookie("accessToken")
+
+    $.ajax({
+        url: '/api/security/'+symbol,
+        headers: {
+            'Authorization': BearerString
+        },
+        contentType: 'application/json',
+        type: "GET",
+        success: function(response, textStatus, jQxhr){
+               parsedJSON = JSON.parse(response)
+               currSecurity = parsedJSON["id"]
+               currSymbol = parsedJSON["symbol"]
+               var chLine = document.getElementById('priceLine');
+
+               document.getElementById("securitySearch").value = "";
+
+               GetSymbolOfCurrSecurity()
+               GetEntityOfCurrSecurity()
+               GenerateNewPriceLine()
+               GetCurrPrice()
+        },
+        error: function( jqXhr, textStatus, errorThrown ){
+                console.log( errorThrown );
+        }
+
+    })
 }
 
 function getAppropriateSecurities(event){
@@ -245,15 +290,57 @@ function getAppropriateSecurities(event){
                var chLine = document.getElementById('priceLine');
 
                document.getElementById("securitySearch").value = "";
-               currChart.destroy();
 
+               GetSymbolOfCurrSecurity()
+               GetEntityOfCurrSecurity()
                GenerateNewPriceLine()
+               GetCurrPrice()
         },
         error: function( jqXhr, textStatus, errorThrown ){
                 console.log( errorThrown );
         }
 
     })
+}
+
+function money_round(num) {
+    return Math.ceil(num * 100) / 100;
+}
+
+function GetDailyMostTraded(){
+    var BearerString = 'Bearer ' + api.readCookie("accessToken")
+
+    $.ajax({
+            url: '/api/securities/mostdailytraded',
+            headers: {
+                'Authorization': BearerString
+            },
+            contentType: 'application/json',
+            type: "GET",
+            success: function(response, textStatus, jQxhr){
+                   parsedJSON = JSON.parse(response)
+                   console.log("Daily Most Traded")
+                   console.log(parsedJSON)
+                   newHTMLString = "Top most traded securities: "
+
+
+                   for (var i =0;i<parsedJSON.length;i++){
+                        console.log(parsedJSON[i]["security"]["symbol"])
+                        newHTMLString += "<a nohref onclick=\"loadSecurityFromMarquee(event, '" + parsedJSON[i]["security"]["symbol"] + "')\">" + parsedJSON[i]["security"]["symbol"] + "(" + parsedJSON[i]["frequency"] + ")" + "</a>"
+                        if (i != parsedJSON.length-1){
+                            newHTMLString += ", "
+                        }
+                   }
+
+                   var mostTradedDiv = document.getElementById("mostTraded")
+                   mostTradedDiv.innerHTML = newHTMLString
+
+            },
+            error: function( jqXhr, textStatus, errorThrown ){
+                    console.log( errorThrown );
+            }
+
+        })
 }
 
 function GetSymbolOfCurrSecurity(){
@@ -269,6 +356,32 @@ function GetSymbolOfCurrSecurity(){
             success: function(response, textStatus, jQxhr){
                    parsedJSON = JSON.parse(response)
                    currSymbol = parsedJSON["symbol"]
+
+
+            },
+            error: function( jqXhr, textStatus, errorThrown ){
+                    console.log( errorThrown );
+            }
+
+        })
+}
+
+function GetEntityOfCurrSecurity(){
+    var BearerString = 'Bearer ' + api.readCookie("accessToken")
+
+    $.ajax({
+            url: '/api/entity/'+currSecurity,
+            headers: {
+                'Authorization': BearerString
+            },
+            contentType: 'application/json',
+            type: "GET",
+            success: function(response, textStatus, jQxhr){
+                   parsedJSON = JSON.parse(response)
+                   currEntityName = parsedJSON["name"]
+                   var entityNameDisplay = document.getElementById("currSecName")
+                   entityNameDisplay.textContent = currEntityName
+
 
             },
             error: function( jqXhr, textStatus, errorThrown ){

@@ -104,6 +104,41 @@ func GetCurrEntity(w http.ResponseWriter, r *http.Request){
 	fmt.Fprintf(w, string(byteForm))
 }
 
+func GetEntityBySymbol(w http.ResponseWriter, r *http.Request){
+	vars := mux.Vars(r)
+	symbol, ok := vars["symbol"]
+	if !ok{
+		http.Error(w, "No Symbol Provided", 400)
+		return
+	}
+
+	if _, err := strconv.Atoi(symbol); err == nil {
+		int64Form, err := strconv.ParseInt(symbol, 10, 64)
+		if err != nil{
+			http.Error(w, "Invalid Security ID", 400)
+			ServerLogger.ErrorMsg(err.Error())
+			return
+		}
+		entity, err := OrderController.Database.GetEntityByID(int64Form)
+		if err != nil{
+			http.Error(w, "No Security With This Name", 400)
+			ServerLogger.ErrorMsg(err.Error())
+			return
+		}
+		jsonForm, err := json.Marshal(entity)
+		if err != nil{
+			http.Error(w, "Error Marshalling JSON", 500)
+			return
+		}
+
+		fmt.Fprintf(w, string(jsonForm))
+	}else{
+		http.Error(w, "Could not find security with associated id",500)
+		ServerLogger.ErrorMsg("Could not find security with associated id")
+		return
+	}
+}
+
 func CreateSecurity(w http.ResponseWriter, r *http.Request){
 	accessToken, err := util.GetAccessTokenFromHeader(w, r)
 	if err != nil{

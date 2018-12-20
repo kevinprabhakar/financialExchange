@@ -1,9 +1,5 @@
 body{
-    height: 100%;
-    background-repeat: no-repeat;
-    background:url(https://i.ytimg.com/vi/4kfXjatgeEU/maxresdefault.jpg);
-    font-family: 'Oxygen', sans-serif;
-    background-size: cover;
+    background-color: #F2F2F2 !important;
 };
 
 .tab {
@@ -27,9 +23,54 @@ body{
 }
 
 #currUserOrders {
-    max-height: 260px;
+    max-height: 175px;
 }
 
 #currPrice {
     float:right;
+}
+
+.userInfoCard{
+    background-color: #FFFFFF !important;
+    max-height:250px !important;
+}
+
+.card-body{
+    padding:10px !important;
+}
+
+#numShares{
+    width: 25%;
+}
+
+#numSharesLabel{
+    padding-right:10px;
+}
+
+#amtShareLabel{
+    padding-right:10px;
+}
+
+#amountPerShare{
+    width:25%;
+}
+
+#cashValCol{
+    padding-top:20%;
+}
+
+#stockValCol{
+    padding-top:20%;
+}
+
+#searchForm{
+    float:right;
+}
+
+#secSearchButton{
+    float: right;
+}
+
+.marquee{
+    font-family: "Verdana";
 }

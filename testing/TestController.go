@@ -19,6 +19,7 @@ import (
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
+
 type TestController struct{
 	Db 		*sql.MySqlDB
 	Logger 	*util.Logger
@@ -205,6 +206,45 @@ func (self *TestController)GiveUserMoney(userId int64, cashValue model.Money)(er
 	}
 
 	return nil
+}
+
+func (self *TestController)CreateEntityWithSecurityWithNameAndSymbol(entityName string, entitySymbol string)(int64, int64, string, error){
+	newEntity := model.Entity{
+		Name: entityName,
+		Email: RandSeq(10)+"@gmail.com",
+		PassHash: RandSeq(10),
+		Security: -1,
+		Created: time.Now().Unix(),
+		Deleted: time.Now().Unix(),
+	}
+
+	entityId, insertErr := self.Db.InsertEntityIntoTable(newEntity)
+
+	if insertErr != nil{
+		self.Logger.ErrorMsg("Error inserting entity into table")
+		return 0, 0, "", insertErr
+	}
+
+	//Create security and insert to database
+	newSecurity := model.Security{
+		Entity: entityId,
+		Symbol: entitySymbol,
+	}
+
+	securityId, insertErr := self.Db.InsertSecurityIntoTable(newSecurity)
+
+	if insertErr != nil {
+		self.Logger.ErrorMsg("Error inserting security into table")
+		return 0, 0, "", insertErr
+	}
+
+	err := self.Db.UpdateEntityWithSecurityID(entityId, securityId)
+	if err != nil{
+		self.Logger.ErrorMsg("Error updating entity with security Id")
+		return 0, 0, "", err
+	}
+
+	return entityId, securityId, newSecurity.Symbol, nil
 }
 
 //Returns entity ID, security Id, security Symbol, and error

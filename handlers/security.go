@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"time"
 )
 
 func GetSecurity(w http.ResponseWriter, r *http.Request){
@@ -39,6 +40,7 @@ func GetSecurity(w http.ResponseWriter, r *http.Request){
 		fmt.Fprintf(w, string(jsonForm))
 	}else{
 		security, err := OrderController.Database.GetSecurityBySymbol(symbol)
+		ServerLogger.Debug(symbol)
 		if err != nil{
 			http.Error(w, "No Security With This Name", 400)
 			ServerLogger.ErrorMsg(err.Error())
@@ -56,4 +58,25 @@ func GetSecurity(w http.ResponseWriter, r *http.Request){
 
 
 
+}
+
+func GetMostDailyTraded(w http.ResponseWriter, r *http.Request){
+	startTime := time.Now().Add(-1 * 24 * time.Hour)
+
+	mostTradedSecurities, err := OrderController.GetMostOrderedSecuritiesOverTimeframe(startTime, 10)
+	if err != nil{
+		http.Error(w, "Couldnt get most traded securities", 500)
+		ServerLogger.ErrorMsg(err.Error())
+		return
+	}
+
+	jsonForm, err := json.Marshal(mostTradedSecurities)
+	if err != nil{
+		http.Error(w, "Error Marshalling JSON", 500)
+		ServerLogger.ErrorMsg(err.Error())
+
+		return
+	}
+
+	fmt.Fprintf(w, string(jsonForm))
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 	"math/rand"
 	"fmt"
+	"financialExchange/handlers"
 )
 
 //func TestDropTables(t *testing.T){
@@ -945,9 +946,137 @@ func TestBrownianForFrontEnd(t *testing.T){
 	//	t.Fail()
 	//	return
 	//}
+}
 
 
+func TestProduction(t *testing.T){
+	err := TestingController.ResetTables()
+	if err != nil{
+		TestingController.Logger.ErrorMsg("Error Resetting SQL tables")
+		t.Fail()
+		return
+	}
 
+	entities := make([]model.Entity, 0)
+	var TeamNames = []string{"Cloud9", "SK Telecom", "KT Rolster", "Liquid", "Digital Chaos", "FlyQuest", "Royal Never Give Up", "Boston Uprising","Wings Gaming","San Francisco Shock"}
+	var TeamSymbols = []string{"C9","SKT","KTR","LQD","DGC","FQ","RNG","BU","WG","SFS"}
 
+	for i:=0;i<10;i++ {
+		entityID, _, _, err := TestingController.CreateEntityWithSecurityWithNameAndSymbol(TeamNames[i],TeamSymbols[i])
+		if err != nil {
+			TestingController.Logger.ErrorMsg("Error Creating Entity")
+			t.Fail()
+			return
+		}
 
+		entity, err := TestingController.Db.GetEntityByID(entityID)
+		if err != nil{
+			TestingController.Logger.ErrorMsg("Error retreiving entity")
+			t.Fail()
+			return
+		}
+
+		entities = append(entities, *entity)
+
+		_, err = TestingController.IPOEntity(entityID)
+		if err != nil {
+			TestingController.Logger.ErrorMsg("Error Doing IPO")
+			t.Fail()
+			return
+		}
+	}
+	userIDs := make([]int64, 0)
+	for i:=0;i<1000;i++{
+		buyUserID, err := TestingController.CreateUser()
+		if err != nil{
+			TestingController.Logger.ErrorMsg("Error Creating Buy Users")
+			t.Fail()
+			return
+		}
+		userIDs = append(userIDs, buyUserID)
+		err = TestingController.GiveUserMoney(buyUserID, model.NewMoneyObject(100000.00))
+		if err != nil{
+			TestingController.Logger.ErrorMsg("Error giving buy user money")
+			t.Fail()
+			return
+		}
+	}
+	for i:=0;i<100;i++{
+		for _,userID := range(userIDs){
+			s2 := rand.NewSource(time.Now().UnixNano())
+			r2 := rand.New(s2)
+			pctChangeOfPrice := r2.Int63n(5)-10
+			ownedShareReports, err := handlers.CustomerController.GetOwnedSharesReport(userID)
+			if err != nil{
+				t.Fail()
+				return
+			}
+
+			s4 := rand.NewSource(time.Now().UnixNano())
+			r4 := rand.New(s4)
+			currEntityIndex := r4.Intn(len(entities))
+
+			currEntity := entities[currEntityIndex]
+
+			currSecurity, err := TestingController.Db.GetSecurityByEntityID(currEntity.Id)
+			if err != nil{
+				fmt.Println(err.Error())
+				t.Fail()
+				return
+			}
+
+			secCurrPrice, err := handlers.PriceController.GetCurrPriceOfSecurity(currSecurity.Id)
+			if err != nil{
+				t.Fail()
+				return
+			}
+			if len(ownedShareReports) == 0{
+				pctChangeOfPrice = r2.Int63n(10)
+				_, err := TestingController.PlaceBuyOrderForUser(userID, currEntity.Id, currSecurity.Symbol, model.NewMoneyObject(secCurrPrice.PricePoint+(secCurrPrice.PricePoint*(float64(pctChangeOfPrice)/100))),5)
+				if err != nil{
+					fmt.Println(err.Error())
+					t.Fail()
+					return
+				}
+			}else{
+				for _, ownedShareReport := range(ownedShareReports){
+					if ownedShareReport.Security == currEntity.Id{
+						if ownedShareReport.NumShares > 0{
+							s3 := rand.NewSource(time.Now().UnixNano())
+							r3 := rand.New(s3)
+							BuySellHold := r3.Intn(3)
+							switch BuySellHold{
+							case 0:
+								_, err := TestingController.PlaceSellOrderForUser(userID, currEntity.Id, currSecurity.Symbol, model.NewMoneyObject(secCurrPrice.PricePoint+(secCurrPrice.PricePoint*(float64(pctChangeOfPrice)/100))),1)
+								if err != nil{
+									t.Fail()
+									return
+								}
+								break
+							case 1:
+								_, err := TestingController.PlaceBuyOrderForUser(userID, currEntity.Id, currSecurity.Symbol, model.NewMoneyObject(secCurrPrice.PricePoint+(secCurrPrice.PricePoint*(float64(pctChangeOfPrice)/100))),1)
+								if err != nil{
+									t.Fail()
+									return
+								}
+								break
+							case 2:
+								continue
+							}
+
+						}else{
+							_, err := TestingController.PlaceBuyOrderForUser(userID, currEntity.Id, currSecurity.Symbol, model.NewMoneyObject(secCurrPrice.PricePoint+(secCurrPrice.PricePoint*(float64(pctChangeOfPrice)/100))),1)
+							if err != nil{
+								t.Fail()
+								return
+							}
+							break
+						}
+					}
+				}
+			}
+		}
+		time.Sleep(30 * time.Second)
+
+	}
 }

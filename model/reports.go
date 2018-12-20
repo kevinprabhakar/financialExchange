@@ -8,8 +8,13 @@ import (
 
 type SecurityReport struct{
 	Id 			bson.ObjectId 		`json:"id"`
-	Entity 		bson.ObjectId 		`json:"entity"`
+	Entity 		 		`json:"entity"`
 	Symbol 		string 				`json:"symbol"`
+}
+
+type MostTradedReport struct{
+	Security 		Security 		`json:"security"`
+	Frequency 		int64			`json:"frequency"`
 }
 
 type TransactionReport struct{
